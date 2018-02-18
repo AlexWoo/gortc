@@ -44,7 +44,7 @@ func InitModule() {
 }
 
 func RunModule() {
-	var main *MainModule
+	var main Module
 	for name, module := range modules {
 		if name == "main" {
 			// Make sure main module run at last

@@ -1,15 +1,14 @@
-#!/usr/bin/env bash
-
 buildlist="gortc"
-
-#if [ ! -f install ]; then
-#    echo 'install must be run within its container folder' 1>&2
-#    exit 1
-#fi
 
 CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
+
+for def in $DEPENDENCE
+do
+    echo "go get $def"
+    go get $def
+done
 
 gofmt -w src
 for p in $buildlist
@@ -18,5 +17,3 @@ do
 done
 
 export GOPATH="$OLDGOPATH"
-
-echo 'finished'

@@ -23,4 +23,6 @@ key=CONFPATH
 value="\"$RTCPATH/conf/gortc.ini\""
 . auto/macro
 
+DEPENDENCE=`cat auto/dependence`
+
 . auto/install
