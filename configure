@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+
+
+. auto/options
+
+case ".$RTCPATH" in
+    .)  RTCPATH=/usr/local/gortc    ;;
+    .!) RTCPATH=.                   ;;
+    *)                              ;;
+esac
+
+MACROFILE=src/gortc/macro.go
+
+. auto/tmpl
+
+key=RTCPATH
+value="\"$RTCPATH\""
+. auto/macro
+
+key=CONFPATH
+value="\"$RTCPATH/conf/gortc.ini\""
+. auto/macro
+
+. auto/install
