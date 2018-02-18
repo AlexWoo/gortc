@@ -6,7 +6,7 @@ package main
 
 import (
 	"fmt"
-	"runtime"
+	"syscall"
 )
 
 type Module interface {
@@ -28,7 +28,7 @@ func ConfigMdoule() {
 		if !module.LoadConfig() {
 			// TODO logErr
 			fmt.Printf("Load %s Config failed", name)
-			runtime.Goexit()
+			syscall.Exit(1)
 		}
 	}
 }
@@ -38,7 +38,7 @@ func InitModule() {
 		if !module.Init() {
 			//TODO logErr
 			fmt.Printf("Init %s Module failed", name)
-			runtime.Goexit()
+			syscall.Exit(2)
 		}
 	}
 }

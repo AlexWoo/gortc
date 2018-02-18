@@ -95,7 +95,8 @@ func (m *MainModule) Exit() {
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	AddModule("API server", NewAPIServerModule())
+	AddModule("RTCServer", NewRTCServerModule())
+	AddModule("APIServer", NewAPIServerModule())
 }
 
 func main() {
