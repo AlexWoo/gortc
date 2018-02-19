@@ -7,7 +7,7 @@
 
 case ".$RTCPATH" in
     .)  RTCPATH=/usr/local/gortc    ;;
-    .!) RTCPATH=.                   ;;
+    .!) RTCPATH=./                  ;;
     *)                              ;;
 esac
 

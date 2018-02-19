@@ -225,6 +225,16 @@ func confMsec(value string, defaultVal Msec_t) Msec_t {
 	return defaultVal
 }
 
+func ConfEnum(e map[string]int, value string, defaultVal int) int {
+	ret, ok := e[value]
+
+	if ok {
+		return ret
+	}
+
+	return defaultVal
+}
+
 func Config(f *ini.File, secName string, it interface{}) bool {
 	if secName == "DEFAULT" {
 		secName = ""
@@ -263,6 +273,8 @@ func Config(f *ini.File, secName string, it interface{}) bool {
 			confV := confValue(strings.ToLower(fn), s)
 			value.SetUint(uint64(confMsec(confV, defaultMsec(fd))))
 		default:
+			LogError("Unsuppoted config, secName: %s, name: %s, type: %s",
+				secName, fn, ft)
 			return false
 		}
 	}

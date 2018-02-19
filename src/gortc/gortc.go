@@ -26,12 +26,6 @@ func GetGID() uint64 {
 }
 
 type MainConfig struct {
-	A bool   `default:"false"`
-	B string `default:"Hello"`
-	C uint64 `default:"99999"`
-	D int64  `default:"-1000"`
-	E Size_t `default:"100M"`
-	F Msec_t `default:"10s"`
 }
 
 type MainModule struct {
@@ -53,7 +47,7 @@ func (m *MainModule) LoadConfig() bool {
 
 	f, err := ini.Load(CONFPATH)
 	if err != nil {
-		//TODO logErr
+		LogError("Load config file %s error: %v", CONFPATH, err)
 		return false
 	}
 
@@ -95,6 +89,7 @@ func (m *MainModule) Exit() {
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	AddModule("MainLog", NewLog())
 	AddModule("RTCServer", NewRTCServerModule())
 	AddModule("APIServer", NewAPIServerModule())
 }
@@ -104,6 +99,8 @@ func main() {
 
 	ConfigMdoule()
 	InitModule()
+
+	LogInfo("Init gortc successd, start Running ...")
 
 	RunModule()
 }

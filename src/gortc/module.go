@@ -4,11 +4,6 @@
 
 package main
 
-import (
-	"fmt"
-	"syscall"
-)
-
 type Module interface {
 	LoadConfig() bool
 	Init() bool
@@ -18,27 +13,25 @@ type Module interface {
 }
 
 var modules = make(map[string]Module)
+var callseq []string
 
 func AddModule(name string, module Module) {
 	modules[name] = module
+	callseq = append(callseq, name)
 }
 
 func ConfigMdoule() {
-	for name, module := range modules {
-		if !module.LoadConfig() {
-			// TODO logErr
-			fmt.Printf("Load %s Config failed", name)
-			syscall.Exit(1)
+	for _, name := range callseq {
+		if !modules[name].LoadConfig() {
+			LogFatal("Load %s Config failed", name)
 		}
 	}
 }
 
 func InitModule() {
-	for name, module := range modules {
-		if !module.Init() {
-			//TODO logErr
-			fmt.Printf("Init %s Module failed", name)
-			syscall.Exit(2)
+	for _, name := range callseq {
+		if !modules[name].Init() {
+			LogFatal("Init %s Module failed", name)
 		}
 	}
 }

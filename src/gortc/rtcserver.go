@@ -38,7 +38,7 @@ func (m *RTCServerModule) LoadConfig() bool {
 
 	f, err := ini.Load(CONFPATH)
 	if err != nil {
-		// TODO logErr
+		LogError("Load config file %s error: %v", CONFPATH, err)
 		return false
 	}
 
