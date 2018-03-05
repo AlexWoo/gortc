@@ -1,10 +1,11 @@
 // Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 //
-// Base Config
+// RTC Config
 
-package main
+package rtclib
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -273,7 +274,7 @@ func Config(f *ini.File, secName string, it interface{}) bool {
 			confV := confValue(strings.ToLower(fn), s)
 			value.SetUint(uint64(confMsec(confV, defaultMsec(fd))))
 		default:
-			LogError("Unsuppoted config, secName: %s, name: %s, type: %s",
+			fmt.Printf("Unsuppoted config, secName: %s, name: %s, type: %s\n",
 				secName, fn, ft)
 			return false
 		}

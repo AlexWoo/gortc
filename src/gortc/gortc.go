@@ -7,11 +7,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"gortc/apiserver"
+	"gortc/rtclib"
 	"os"
 	"os/signal"
 	"runtime"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/go-ini/ini"
 )
@@ -26,81 +29,99 @@ func GetGID() uint64 {
 }
 
 type MainConfig struct {
+	LogPath       string
+	LogLevel      string
+	LogRotateSize rtclib.Size_t
 }
 
-type MainModule struct {
-	name    string
-	signals chan os.Signal
-	config  *MainConfig
-}
+var config *MainConfig
+var signals chan os.Signal
 
-func NewMainModule() *MainModule {
-	m := new(MainModule)
-	m.name = "main"
-	m.signals = make(chan os.Signal)
+func loadConfig() {
+	confPath := RTCPATH + "/conf/gortc.ini"
+	config = new(MainConfig)
 
-	return m
-}
-
-func (m *MainModule) LoadConfig() bool {
-	m.config = new(MainConfig)
-
-	f, err := ini.Load(CONFPATH)
+	f, err := ini.Load(confPath)
 	if err != nil {
-		LogError("Load config file %s error: %v", CONFPATH, err)
-		return false
+		fmt.Println("Load "+confPath+" Failed: ", err)
+		os.Exit(1)
 	}
 
-	return Config(f, "", m.config)
+	if !rtclib.Config(f, "", config) {
+		fmt.Println("Parse config " + confPath + " Failed")
+		os.Exit(1)
+	}
 }
 
-func (m *MainModule) Init() bool {
+func initSignal() {
+	signals = make(chan os.Signal)
+
 	// quit
-	signal.Notify(m.signals, syscall.SIGQUIT)
+	signal.Notify(signals, syscall.SIGQUIT)
+	signal.Notify(signals, syscall.SIGINT)
 
 	// terminate
-	signal.Notify(m.signals, syscall.SIGTERM)
-
-	// reconfigure
-	signal.Notify(m.signals, syscall.SIGHUP)
+	signal.Notify(signals, syscall.SIGTERM)
 
 	// ignore
-	//m.signal.Ignore(syscall.SIGINT)
+	signal.Ignore(syscall.SIGHUP)
 	signal.Ignore(syscall.SIGALRM)
 	signal.Ignore(syscall.SIGUSR1)
 	signal.Ignore(syscall.SIGUSR2)
 	signal.Ignore(syscall.SIGPIPE)
-
-	return true
 }
 
-func (m *MainModule) Run() {
+func mainloop() {
+	rtclib.RunModule(rtclog)
+	t := time.NewTimer(time.Second * 1)
+	exit := false
+
 	for {
-		s := <-m.signals
-		fmt.Println("get signal: ", s)
+		select {
+		case s := <-signals:
+			fmt.Println("get signal: ", s)
+
+			switch s {
+			case syscall.SIGINT:
+				rtclib.ExitModule()
+			case syscall.SIGQUIT:
+				rtclib.ExitModule()
+			case syscall.SIGTERM:
+				exit = true
+			}
+		case <-t.C:
+			if !rtclib.CheckModule() {
+				LogError("All Module Exit")
+				exit = true
+			}
+			t = time.NewTimer(time.Second * 1)
+		}
+
+		if exit {
+			break
+		}
 	}
-}
-
-func (m *MainModule) State() {
-}
-
-func (m *MainModule) Exit() {
 }
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	AddModule("MainLog", NewLog())
-	AddModule("RTCServer", NewRTCServerModule())
-	AddModule("APIServer", NewAPIServerModule())
+	rtclib.AddModule("apiserver", apiserver.NewAPIServerModule())
 }
 
 func main() {
-	AddModule("main", NewMainModule())
+	fmt.Println("gortc initSignal ...")
+	initSignal()
+	fmt.Println("gortc loadConfig ...")
+	loadConfig()
+	fmt.Println("gortc initLog ...")
+	initLog()
 
-	ConfigMdoule()
-	InitModule()
+	LogInfo("gortc init modules ...")
+	rtclib.InitModule(rtclog, RTCPATH)
 
-	LogInfo("Init gortc successd, start Running ...")
+	LogInfo("gortc init successd, start Running ...")
 
-	RunModule()
+	mainloop()
+
+	LogInfo("gortc gracefully stop")
 }
