@@ -129,8 +129,14 @@ func (m *APIServerModule) Init() bool {
 }
 
 func (m *APIServerModule) Run() {
-	quit := make(chan bool, 2)
-	wait := 2
+	wait := 0
+	if m.server != nil {
+		wait++
+	}
+	if m.tlsServer != nil {
+		wait++
+	}
+	quit := make(chan bool, wait)
 
 	if m.server != nil {
 		LogInfo("APIServer start ...")
