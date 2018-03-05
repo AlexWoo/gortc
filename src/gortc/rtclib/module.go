@@ -11,10 +11,14 @@ type Module interface {
 	Exit()
 }
 
-var modules = make(map[string]Module)
+var modules map[string]Module
 var callseq []string
 
 func AddModule(name string, module Module) {
+	if modules == nil {
+		modules = make(map[string]Module)
+	}
+
 	modules[name] = module
 	callseq = append(callseq, name)
 }
@@ -35,11 +39,11 @@ func InitModule(log *Log, rtcPath string) {
 
 func RunModule(log *Log) {
 	for name, module := range modules {
-		go func() {
+		go func(name string, module Module) {
 			module.Run()
 			log.LogInfo("Module %s gracefully exit", name)
 			delete(modules, name)
-		}()
+		}(name, module)
 	}
 }
 
