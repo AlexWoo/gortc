@@ -168,7 +168,7 @@ func (t *rtcTest) process(conn *websocket.Conn) error {
 
 				em := stage.value.(map[string]interface{})
 				for k, v := range em {
-					if rm[k].(string) != v.(string) {
+					if rm[k] != v {
 						return errors.New("para check error")
 					}
 				}
