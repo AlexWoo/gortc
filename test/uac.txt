@@ -1,0 +1,20 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "a": "b",
+        "c": "d"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "a": "b",
+        "c": "d"
+    }
+}
+
+]
