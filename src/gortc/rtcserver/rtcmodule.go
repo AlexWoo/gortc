@@ -5,7 +5,6 @@
 package rtcserver
 
 import (
-	"fmt"
 	"gortc/rtclib"
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ type RTCServerConfig struct {
 	TlsListen     string
 	Cert          string
 	Key           string
+	Realm         string
 	Location      string `default:"/rtc"`
 }
 
@@ -32,12 +32,12 @@ type RTCServerModule struct {
 	tlsServer *http.Server
 }
 
-var rtcserver *RTCServerModule
+var rtcServerModule *RTCServerModule
 
 func NewRTCServerModule() *RTCServerModule {
-	rtcserver := &RTCServerModule{}
+	rtcServerModule = &RTCServerModule{}
 
-	return rtcserver
+	return rtcServerModule
 }
 
 func (m *RTCServerModule) LoadConfig(rtcPath string) bool {
@@ -55,16 +55,16 @@ func (m *RTCServerModule) LoadConfig(rtcPath string) bool {
 	return rtclib.Config(f, "RTCServer", m.config)
 }
 
-func rtcHandler(w http.ResponseWriter, req *http.Request) {
-	//TODO websocket handler
-	fmt.Fprintln(w, "RTCServer")
-}
-
 func (m *RTCServerModule) Init() bool {
 	initLog(m.config, m.rtcPath)
 
+	if m.config.Realm == "" {
+		LogError("Local Realm not configured")
+		return false
+	}
+
 	serveMux := &http.ServeMux{}
-	serveMux.HandleFunc(m.config.Location, rtcHandler)
+	serveMux.HandleFunc(m.config.Location, rtcserver)
 
 	if m.config.Listen != "" {
 		m.server = &http.Server{Addr: m.config.Listen, Handler: serveMux}

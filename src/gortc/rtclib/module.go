@@ -11,14 +11,10 @@ type Module interface {
 	Exit()
 }
 
-var modules map[string]Module
+var modules = make(map[string]Module)
 var callseq []string
 
 func AddModule(name string, module Module) {
-	if modules == nil {
-		modules = make(map[string]Module)
-	}
-
 	modules[name] = module
 	callseq = append(callseq, name)
 }
