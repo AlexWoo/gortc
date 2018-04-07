@@ -5,9 +5,9 @@
 package rtcserver
 
 import (
-	"gortc/rtclib"
 	"net/http"
 	"os"
+	"rtclib"
 	"strings"
 
 	"github.com/go-ini/ini"

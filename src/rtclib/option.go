@@ -2,7 +2,7 @@
 //
 // option parser
 
-package main
+package rtclib
 
 import (
 	"os"

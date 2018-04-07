@@ -6,8 +6,8 @@ package main
 
 import (
 	"fmt"
-	"gortc/rtclib"
 	"os"
+	"rtclib"
 	"strings"
 	"time"
 )

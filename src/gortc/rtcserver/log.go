@@ -6,8 +6,8 @@ package rtcserver
 
 import (
 	"fmt"
-	"gortc/rtclib"
 	"os"
+	"rtclib"
 	"strings"
 	"time"
 )

@@ -5,10 +5,10 @@
 package apiserver
 
 import (
-	"gortc/rtclib"
 	"net/http"
 	"os"
 	"regexp"
+	"rtclib"
 	"strings"
 
 	"github.com/go-ini/ini"

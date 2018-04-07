@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"rtclib"
 	"runtime"
 	"strconv"
 )
@@ -64,7 +65,7 @@ func init() {
 func main() {
 	var err error
 
-	opt := NewOptParser()
+	opt := rtclib.NewOptParser()
 	for opt.GetOpt("ht:f:u:n:c:l:]") {
 		switch opt.Opt() {
 		case 'h':
