@@ -21,8 +21,9 @@ type RTCServerConfig struct {
 	TlsListen     string
 	Cert          string
 	Key           string
-	Realm         string
 	Location      string `default:"/rtc"`
+	Realm         string
+	SLPSelector   string `default:"/conf/.slps"`
 }
 
 type RTCServerModule struct {
@@ -57,6 +58,11 @@ func (m *RTCServerModule) LoadConfig(rtcPath string) bool {
 
 func (m *RTCServerModule) Init() bool {
 	initLog(m.config, m.rtcPath)
+
+	if !initSelector() {
+		LogError("SLP Selector init error")
+		return false
+	}
 
 	if m.config.Realm == "" {
 		LogError("Local Realm not configured")

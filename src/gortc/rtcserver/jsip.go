@@ -13,7 +13,6 @@ import (
 
 	simplejson "github.com/bitly/go-simplejson"
 	"github.com/gorilla/websocket"
-	uuid "github.com/satori/go.uuid"
 )
 
 // return value
@@ -211,20 +210,38 @@ type JSIPSession struct {
 }
 
 var (
-	jtransactions = make(map[string]*JSIPTrasaction)
-	jsessions     = make(map[string]*JSIPSession)
+	Jtransactions = make(map[string]*JSIPTrasaction)
+	Jsessions     = make(map[string]*JSIPSession)
 )
-
-func newDialogueID() string {
-	u1, _ := uuid.NewV1()
-	return rtcServerModule.config.Realm + u1.String()
-}
 
 func transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
 
 // interface
+func JsipParseUri(uri string) (string, string, []string) {
+	var user, host string
+	var paras []string
+
+	ss := strings.Split(uri, "@")
+	if len(ss) == 1 {
+		host = ss[0]
+	} else if len(ss) == 2 {
+		user = ss[0]
+		host = ss[1]
+	} else {
+		return user, host, paras
+	}
+
+	ss = strings.Split(host, ";")
+	if len(ss) > 1 {
+		host = ss[0]
+		paras = ss[1:]
+	}
+
+	return user, host, paras
+}
+
 func JsipName(jsip *JSIP) string {
 	req := jsipReqParse[jsip.Type]
 	if req == "" {
@@ -239,33 +256,58 @@ func JsipName(jsip *JSIP) string {
 	}
 }
 
-func SendNewRequest(req *JSIP) {
-	var target string
+func SendJSIPReq(req *JSIP, dlg string) {
+	var conn *websocket.Conn
 
-	if len(req.Router) > 0 {
-		// Use Router Header 0 as default route if exist
-		target = req.Router[0]
+	if Jsessions[dlg] == nil {
+		var target string
+
+		if len(req.Router) > 0 {
+			// Use Router Header 0 as default route if exist
+			_, target, _ = JsipParseUri(req.Router[0])
+		} else {
+			// Use Request-URI as default route if Router Header not exist
+			_, target, _ = JsipParseUri(req.RequestURI)
+		}
+
+		if target == "" {
+			LogError("Router or RequestURI is nil when send new request")
+			return
+		}
+
+		conn = rtcclient(target)
+		if conn == nil {
+			return
+		}
 	} else {
-		// Use Request-URI as default route if Router Header not exist
-		target = req.RequestURI
+		conn = Jsessions[dlg].conn
 	}
 
-	if target == "" {
-		LogError("Router or RequestURI is nil when send new request")
-		return
-	}
-
-	conn := rtcclient(target)
-	if conn == nil {
-		return
-	}
-
-	req.DialogueID = newDialogueID()
+	req.DialogueID = dlg
 
 	SendJsonSIPMsg(conn, req)
 }
 
-func SendAck(resp *JSIP) {
+func SendJSIPRes(req *JSIP, code int) {
+	if req.Code != 0 {
+		LogError("Cannot send response for response")
+		return
+	}
+
+	resp := &JSIP{
+		Type:       req.Type,
+		Code:       code,
+		From:       req.From,
+		To:         req.To,
+		CSeq:       req.CSeq,
+		DialogueID: req.DialogueID,
+		RawMsg:     make(map[string]interface{}),
+	}
+
+	SendJsonSIPMsg(nil, resp)
+}
+
+func SendJSIPAck(resp *JSIP) {
 	ack := &JSIP{
 		Type:       ACK,
 		From:       resp.From,
@@ -279,7 +321,7 @@ func SendAck(resp *JSIP) {
 	SendJsonSIPMsg(nil, ack)
 }
 
-func SendBye(session *JSIPSession) {
+func SendJSIPBye(session *JSIPSession) {
 	resp := &JSIP{
 		Type:       BYE,
 		DialogueID: session.req.DialogueID,
@@ -288,7 +330,7 @@ func SendBye(session *JSIPSession) {
 	SendJsonSIPMsg(nil, resp)
 }
 
-func SendCancel(session *JSIPSession, req *JSIP) {
+func SendJSIPCancel(session *JSIPSession, req *JSIP) {
 	if req.Type >= 100 {
 		LogError("Cannot cancel response")
 		return
@@ -308,25 +350,6 @@ func SendCancel(session *JSIPSession, req *JSIP) {
 	SendJsonSIPMsg(nil, resp)
 }
 
-func SendResp(req *JSIP, code int) {
-	if req.Code != 0 {
-		LogError("Cannot send response for response")
-		return
-	}
-
-	resp := &JSIP{
-		Type:       req.Type,
-		Code:       code,
-		From:       req.From,
-		To:         req.To,
-		CSeq:       req.CSeq,
-		DialogueID: req.DialogueID,
-		RawMsg:     make(map[string]interface{}),
-	}
-
-	SendJsonSIPMsg(nil, resp)
-}
-
 // Syntax Layer
 func jsipPrepared(jsip *JSIP) (*JSIP, error) {
 	if jsip.DialogueID == "" {
@@ -341,7 +364,7 @@ func jsipPrepared(jsip *JSIP) (*JSIP, error) {
 		return nil, fmt.Errorf("Unknown response %s", JsipName(jsip))
 	}
 
-	session := jsessions[jsip.DialogueID]
+	session := Jsessions[jsip.DialogueID]
 	if session == nil {
 		if jsip.Code != 0 {
 			return nil, errors.New("Cannot send Response for a new session")
@@ -473,7 +496,7 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 // Transaction Layer
 func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	tid := transactionID(jsip, jsip.CSeq)
-	trans := jtransactions[tid]
+	trans := Jtransactions[tid]
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
@@ -488,7 +511,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			cseq:  jsip.CSeq,
 		}
 
-		jtransactions[tid] = trans
+		Jtransactions[tid] = trans
 
 		if sendrecv == RECV {
 			trans.uatype = UAS
@@ -497,7 +520,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		}
 
 		if jsip.Type == ACK {
-			delete(jtransactions, tid)
+			delete(Jtransactions, tid)
 
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
@@ -507,13 +530,13 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			ackTrans := jtransactions[tid]
+			ackTrans := Jtransactions[tid]
 			if ackTrans == nil {
 				LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
-			delete(jtransactions, tid)
+			delete(Jtransactions, tid)
 		}
 
 		if jsip.Type == CANCEL {
@@ -525,7 +548,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			cancelTrans := jtransactions[tid]
+			cancelTrans := Jtransactions[tid]
 			if cancelTrans == nil {
 				LogInfo("Transaction Cancelled not exist")
 				return IGNORE
@@ -538,13 +561,13 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			if sendrecv == RECV {
 				// send CANCEL 200 and REQ 487
-				SendResp(jsip, 200)
-				SendResp(cancelTrans.req, 487)
+				SendJSIPRes(jsip, 200)
+				SendJSIPRes(cancelTrans.req, 487)
 			}
 		}
 
 		if jsip.Type == BYE && sendrecv == RECV {
-			SendResp(jsip, 200)
+			SendJSIPRes(jsip, 200)
 		}
 
 		return OK
@@ -595,7 +618,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	trans.state = TRANS_FINALRESP
 
 	if trans.typ != INVITE {
-		delete(jtransactions, tid)
+		delete(Jtransactions, tid)
 	}
 
 	if trans.typ == CANCEL && sendrecv == RECV {
@@ -634,7 +657,7 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 			case jsip.Code >= 300:
 				session.state = INVITE_ERR
 				if sendrecv == RECV {
-					SendAck(jsip)
+					SendJSIPAck(jsip)
 				}
 				return OK
 			}
@@ -653,7 +676,7 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 			case jsip.Code >= 300:
 				session.state = INVITE_ERR
 				if sendrecv == RECV {
-					SendAck(jsip)
+					SendJSIPAck(jsip)
 				}
 				return OK
 			}
@@ -738,7 +761,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 
 			LogError("Session not exist when process msg %s", JsipName(jsip))
 			if sendrecv == RECV {
-				SendResp(jsip, 481)
+				SendJSIPRes(jsip, 481)
 			}
 			return ERROR
 		}
@@ -761,7 +784,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 }
 
 func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
-	session := jsessions[jsip.DialogueID]
+	session := Jsessions[jsip.DialogueID]
 	if session == nil {
 		if jsip.Code != 0 {
 			LogError("recv response but session is nil")
@@ -774,7 +797,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 			req:  jsip,
 		}
 
-		jsessions[jsip.DialogueID] = session
+		Jsessions[jsip.DialogueID] = session
 
 		if sendrecv == RECV {
 			session.uatype = UAS
@@ -799,7 +822,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 
 	if sendrecv == RECV {
 		LogInfo("RTC read message: %s %v", JsipName(jsip), jsip)
-		// TODO user process
+		TaskProcess(jsip)
 	} else {
 		LogInfo("RTC write message: %s %v", JsipName(jsip), jsip)
 		session.conn.WriteJSON(jsip.RawMsg)
@@ -807,11 +830,11 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 
 	if session.typ == INVITE {
 		if session.state == INVITE_END {
-			delete(jsessions, session.req.DialogueID)
+			delete(Jsessions, session.req.DialogueID)
 		}
 	} else {
 		if session.state == DEFAULT_RESP {
-			delete(jsessions, session.req.DialogueID)
+			delete(Jsessions, session.req.DialogueID)
 		}
 	}
 
