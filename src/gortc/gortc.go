@@ -39,7 +39,7 @@ var config *MainConfig
 var signals chan os.Signal
 
 func loadConfig() {
-	confPath := RTCPATH + "/conf/gortc.ini"
+	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
 	config = new(MainConfig)
 
 	f, err := ini.Load(confPath)
@@ -119,7 +119,7 @@ func main() {
 	initLog()
 
 	LogInfo("gortc init modules ...")
-	rtclib.InitModule(rtclog, RTCPATH)
+	rtclib.InitModule(rtclog, rtclib.RTCPATH)
 
 	LogInfo("gortc init successd, start Running ...")
 

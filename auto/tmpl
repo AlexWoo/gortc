@@ -6,6 +6,6 @@ cat << END > $MACROFILE
 //
 // MACRO define
 
-package main
+package rtclib
 
 END

@@ -11,7 +11,7 @@ case ".$RTCPATH" in
     *)                              ;;
 esac
 
-MACROFILE=src/gortc/macro.go
+MACROFILE=src/rtclib/macro.go
 
 . auto/tmpl
 

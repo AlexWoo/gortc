@@ -42,7 +42,7 @@ func initLog() {
 	if !strings.HasPrefix(config.LogPath, "/") &&
 		!strings.HasPrefix(config.LogPath, "./") {
 
-		config.LogPath = RTCPATH + config.LogPath
+		config.LogPath = rtclib.RTCPATH + config.LogPath
 	}
 
 	logLevel := rtclib.ConfEnum(loglvEnum, config.LogLevel, rtclib.LOGINFO)
