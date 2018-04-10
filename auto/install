@@ -4,16 +4,42 @@ CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
+# get dependence
 for def in $DEPENDENCE
 do
     echo "go get $def"
     go get $def
 done
 
+# compile
 gofmt -w src
+mkdir -p bin/
+
 for p in $buildlist
 do
     go build $p
+    mv $p bin/
 done
+
+# install
+confs="gortc.ini .slps .apis"
+
+if [ "$RTCPATH" != "./" ];then
+    mkdir -p $RTCPATH
+    mkdir -p $RTCPATH/bin
+    mkdir -p $RTCPATH/conf
+    mkdir -p $RTCPATH/logs
+    mkdir -p $RTCPATH/slp
+    mkdir -p $RTCPATH/api
+
+    install -D bin/* $RTCPATH/bin -S .bak -m 755
+
+    for f in $confs
+    do
+        if [ ! -f $RTCPATH/conf/$f ];then
+            install conf/$f $RTCPATH/conf/$f -m 644
+        fi
+    done
+fi
 
 export GOPATH="$OLDGOPATH"
