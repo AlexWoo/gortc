@@ -8,21 +8,8 @@ import (
 	"fmt"
 	"os"
 	"rtclib"
-	"strings"
 	"time"
 )
-
-var loglevel = []string{
-	"debug",
-	"info ",
-	"error",
-	"fatal"}
-
-var loglvEnum = map[string]int{
-	"debug": rtclib.LOGDEBUG,
-	"info":  rtclib.LOGINFO,
-	"error": rtclib.LOGERROR,
-	"fatal": rtclib.LOGFATAL}
 
 type RTCLogHandle struct {
 }
@@ -31,7 +18,8 @@ var rtclog *rtclib.Log
 
 func (handle RTCLogHandle) LogPrefix(loglv int) string {
 	timestr := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("%s %s [main] %d", timestr, loglevel[loglv], os.Getpid())
+	return fmt.Sprintf("%s %s [main] %d", timestr, rtclib.LogLevel[loglv],
+		os.Getpid())
 }
 
 func (handle RTCLogHandle) LogSuffix(loglv int) string {
@@ -39,16 +27,12 @@ func (handle RTCLogHandle) LogSuffix(loglv int) string {
 }
 
 func initLog() {
-	if !strings.HasPrefix(config.LogPath, "/") &&
-		!strings.HasPrefix(config.LogPath, "./") {
-
-		config.LogPath = rtclib.RTCPATH + config.LogPath
-	}
-
-	logLevel := rtclib.ConfEnum(loglvEnum, config.LogLevel, rtclib.LOGINFO)
+	logPath := rtclib.RTCPATH + "/logs/error.log"
+	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
+		rtclib.LOGINFO)
 
 	rtclogHandle := RTCLogHandle{}
-	rtclog = rtclib.NewLog(rtclogHandle, config.LogPath, logLevel,
+	rtclog = rtclib.NewLog(rtclogHandle, logPath, logLevel,
 		int64(config.LogRotateSize))
 	if rtclog == nil {
 		os.Exit(1)

@@ -30,7 +30,6 @@ func GetGID() uint64 {
 }
 
 type MainConfig struct {
-	LogPath       string
 	LogLevel      string
 	LogRotateSize rtclib.Size_t
 }

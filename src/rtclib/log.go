@@ -17,6 +17,20 @@ const (
 	LOGFATAL
 )
 
+var LogLevel = []string{
+	"debug",
+	"info ",
+	"error",
+	"fatal",
+}
+
+var LoglvEnum = map[string]int{
+	"debug": LOGDEBUG,
+	"info":  LOGINFO,
+	"error": LOGERROR,
+	"fatal": LOGFATAL,
+}
+
 type LogHandle interface {
 	LogPrefix(loglv int) string
 	LogSuffix(loglv int) string
