@@ -2,7 +2,7 @@
 //
 // RTC Transport layer
 
-package rtcserver
+package rtcmodule
 
 import (
 	"net/http"
@@ -71,8 +71,8 @@ func rtcclient(target string) *websocket.Conn {
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + rtcServerModule.config.Location +
-		"?userid=" + rtcServerModule.config.Realm
+	url := "http://" + target + module.config.Location + "?userid=" +
+		module.config.Realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		LogError("Connect to %s failed", url)

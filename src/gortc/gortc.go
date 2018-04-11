@@ -7,8 +7,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"gortc/apiserver"
-	"gortc/rtcserver"
+	"gortc/apimodule"
+	"gortc/rtcmodule"
 	"os"
 	"os/signal"
 	"rtclib"
@@ -105,8 +105,8 @@ func mainloop() {
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	rtclib.AddModule("apiserver", apiserver.NewAPIServerModule())
-	rtclib.AddModule("rtcserver", rtcserver.NewRTCServerModule())
+	rtclib.AddModule("apimodule", apimodule.NewAPIModule())
+	rtclib.AddModule("rtcmodule", rtcmodule.NewRTCModule())
 }
 
 func main() {

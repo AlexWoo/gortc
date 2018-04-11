@@ -1,8 +1,8 @@
 // Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 //
-// API Server Module
+// API Module
 
-package apiserver
+package apimodule
 
 import (
 	"net/http"
@@ -13,7 +13,7 @@ import (
 	"github.com/go-ini/ini"
 )
 
-type APIServerConfig struct {
+type APIModuleConfig struct {
 	LogLevel      string
 	LogRotateSize rtclib.Size_t
 	Listen        string
@@ -22,22 +22,22 @@ type APIServerConfig struct {
 	Key           string
 }
 
-type APIServerModule struct {
-	config    *APIServerConfig
+type APIModule struct {
+	config    *APIModuleConfig
 	server    *http.Server
 	tlsServer *http.Server
 }
 
-var apiserver *APIServerModule
+var module *APIModule
 
-func NewAPIServerModule() *APIServerModule {
-	apiserver := &APIServerModule{}
+func NewAPIModule() *APIModule {
+	module := &APIModule{}
 
-	return apiserver
+	return module
 }
 
-func (m *APIServerModule) LoadConfig() bool {
-	m.config = new(APIServerConfig)
+func (m *APIModule) LoadConfig() bool {
+	m.config = new(APIModuleConfig)
 
 	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
 
@@ -47,7 +47,7 @@ func (m *APIServerModule) LoadConfig() bool {
 		return false
 	}
 
-	return rtclib.Config(f, "APIServer", m.config)
+	return rtclib.Config(f, "APIModule", m.config)
 }
 
 func parseUri(uri string) (bool, string, string, string) {
@@ -77,7 +77,7 @@ func handler(w http.ResponseWriter, req *http.Request) {
 	NewResponse(callAPI(req, apiname, version, paras)).SendResp(w)
 }
 
-func (m *APIServerModule) Init() bool {
+func (m *APIModule) Init() bool {
 	initLog(m.config)
 
 	serveMux := &http.ServeMux{}
@@ -116,7 +116,7 @@ func (m *APIServerModule) Init() bool {
 	return true
 }
 
-func (m *APIServerModule) Run() {
+func (m *APIModule) Run() {
 	wait := 0
 	if m.server != nil {
 		wait++
@@ -155,7 +155,7 @@ func (m *APIServerModule) Run() {
 	}
 }
 
-func (m *APIServerModule) Exit() {
+func (m *APIModule) Exit() {
 	if m.server != nil {
 		LogInfo("close APIServer ...")
 		m.server.Close()

@@ -2,7 +2,7 @@
 //
 // API Log
 
-package apiserver
+package apimodule
 
 import (
 	"fmt"
@@ -14,27 +14,27 @@ import (
 type RTCLogHandle struct {
 }
 
-var apilog *rtclib.Log
+var log *rtclib.Log
 
-func (handle RTCLogHandle) LogPrefix(loglv int) string {
+func (handle *RTCLogHandle) LogPrefix(loglv int) string {
 	timestr := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("%s %s [apiserver] %d",
+	return fmt.Sprintf("%s %s [api] %d",
 		timestr, rtclib.LogLevel[loglv], os.Getpid())
 }
 
-func (handle RTCLogHandle) LogSuffix(loglv int) string {
+func (handle *RTCLogHandle) LogSuffix(loglv int) string {
 	return ""
 }
 
-func initLog(config *APIServerConfig) {
+func initLog(config *APIModuleConfig) {
 	logPath := rtclib.RTCPATH + "/logs/api.log"
 	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
 		rtclib.LOGINFO)
 
-	rtclogHandle := RTCLogHandle{}
-	apilog = rtclib.NewLog(rtclogHandle, logPath, logLevel,
+	rtclogHandle := &RTCLogHandle{}
+	log = rtclib.NewLog(rtclogHandle, logPath, logLevel,
 		int64(config.LogRotateSize))
-	if apilog == nil {
+	if log == nil {
 		os.Exit(1)
 	}
 
@@ -42,17 +42,17 @@ func initLog(config *APIServerConfig) {
 }
 
 func LogDebug(format string, v ...interface{}) {
-	apilog.LogDebug(format, v...)
+	log.LogDebug(format, v...)
 }
 
 func LogInfo(format string, v ...interface{}) {
-	apilog.LogInfo(format, v...)
+	log.LogInfo(format, v...)
 }
 
 func LogError(format string, v ...interface{}) {
-	apilog.LogError(format, v...)
+	log.LogError(format, v...)
 }
 
 func LogFatal(format string, v ...interface{}) {
-	apilog.LogFatal(format, v...)
+	log.LogFatal(format, v...)
 }

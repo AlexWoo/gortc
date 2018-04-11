@@ -2,7 +2,7 @@
 //
 // API Response
 
-package apiserver
+package apimodule
 
 import (
 	"net/http"

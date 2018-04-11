@@ -1,8 +1,8 @@
 // Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 //
-// RTC Server Module
+// RTC Module
 
-package rtcserver
+package rtcmodule
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 	"github.com/go-ini/ini"
 )
 
-type RTCServerConfig struct {
+type RTCModuleConfig struct {
 	LogLevel      string
 	LogRotateSize rtclib.Size_t
 	Listen        string
@@ -24,22 +24,22 @@ type RTCServerConfig struct {
 	SLPSelector   string `default:"/conf/.slps"`
 }
 
-type RTCServerModule struct {
-	config    *RTCServerConfig
+type RTCModule struct {
+	config    *RTCModuleConfig
 	server    *http.Server
 	tlsServer *http.Server
 }
 
-var rtcServerModule *RTCServerModule
+var module *RTCModule
 
-func NewRTCServerModule() *RTCServerModule {
-	rtcServerModule = &RTCServerModule{}
+func NewRTCModule() *RTCModule {
+	module = &RTCModule{}
 
-	return rtcServerModule
+	return module
 }
 
-func (m *RTCServerModule) LoadConfig() bool {
-	m.config = new(RTCServerConfig)
+func (m *RTCModule) LoadConfig() bool {
+	m.config = new(RTCModuleConfig)
 
 	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
 
@@ -49,10 +49,10 @@ func (m *RTCServerModule) LoadConfig() bool {
 		return false
 	}
 
-	return rtclib.Config(f, "RTCServer", m.config)
+	return rtclib.Config(f, "RTCModule", m.config)
 }
 
-func (m *RTCServerModule) Init() bool {
+func (m *RTCModule) Init() bool {
 	initLog(m.config)
 
 	if !initSelector() {
@@ -101,7 +101,7 @@ func (m *RTCServerModule) Init() bool {
 	return true
 }
 
-func (m *RTCServerModule) Run() {
+func (m *RTCModule) Run() {
 	wait := 0
 	if m.server != nil {
 		wait++
@@ -140,7 +140,7 @@ func (m *RTCServerModule) Run() {
 	}
 }
 
-func (m *RTCServerModule) Exit() {
+func (m *RTCModule) Exit() {
 	if m.server != nil {
 		LogInfo("close RTCServer ...")
 		m.server.Close()

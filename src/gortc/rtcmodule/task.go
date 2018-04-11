@@ -2,7 +2,7 @@
 //
 // RTC Task manager
 
-package rtcserver
+package rtcmodule
 
 import (
 	"strings"
@@ -25,7 +25,7 @@ var tasks = make(map[string]*Task)
 
 func (t *Task) newDialogueID() string {
 	u1, _ := uuid.NewV1()
-	dlg := rtcServerModule.config.Realm + u1.String()
+	dlg := module.config.Realm + u1.String()
 
 	t.dlgs = append(t.dlgs, dlg)
 	tasks[dlg] = t

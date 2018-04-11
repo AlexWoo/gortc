@@ -1,8 +1,8 @@
 // Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 //
-// RTC Server Module
+// RTC Json SIP
 
-package rtcserver
+package rtcmodule
 
 import (
 	"encoding/json"

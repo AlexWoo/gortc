@@ -2,7 +2,7 @@
 //
 // RTC Service Logical Processor manager
 
-package rtcserver
+package rtcmodule
 
 import (
 	"fmt"
@@ -63,7 +63,7 @@ func slpLoad(name string, slpFile string) bool {
 }
 
 func initSelector() bool {
-	slpm.slpconf = rtclib.RTCPATH + rtcServerModule.config.SLPSelector
+	slpm.slpconf = rtclib.RTCPATH + module.config.SLPSelector
 	slpm.slpdir = rtclib.RTCPATH + "/slp/"
 
 	f, err := os.Open(slpm.slpconf)
