@@ -11,18 +11,6 @@ import (
 	"time"
 )
 
-var loglevel = []string{
-	"debug",
-	"info ",
-	"error",
-	"fatal"}
-
-var loglvEnum = map[string]int{
-	"debug": rtclib.LOGDEBUG,
-	"info":  rtclib.LOGINFO,
-	"error": rtclib.LOGERROR,
-	"fatal": rtclib.LOGFATAL}
-
 type RTCLogHandle struct {
 }
 
@@ -31,7 +19,7 @@ var apilog *rtclib.Log
 func (handle RTCLogHandle) LogPrefix(loglv int) string {
 	timestr := time.Now().Format("2006-01-02 15:04:05.000")
 	return fmt.Sprintf("%s %s [apiserver] %d",
-		timestr, loglevel[loglv], os.Getpid())
+		timestr, rtclib.LogLevel[loglv], os.Getpid())
 }
 
 func (handle RTCLogHandle) LogSuffix(loglv int) string {
