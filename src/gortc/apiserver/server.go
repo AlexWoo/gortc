@@ -9,13 +9,11 @@ import (
 	"os"
 	"regexp"
 	"rtclib"
-	"strings"
 
 	"github.com/go-ini/ini"
 )
 
 type APIServerConfig struct {
-	LogPath       string
 	LogLevel      string
 	LogRotateSize rtclib.Size_t
 	Listen        string
@@ -25,7 +23,6 @@ type APIServerConfig struct {
 }
 
 type APIServerModule struct {
-	rtcPath   string
 	config    *APIServerConfig
 	server    *http.Server
 	tlsServer *http.Server
@@ -39,11 +36,10 @@ func NewAPIServerModule() *APIServerModule {
 	return apiserver
 }
 
-func (m *APIServerModule) LoadConfig(rtcPath string) bool {
-	m.rtcPath = rtcPath
+func (m *APIServerModule) LoadConfig() bool {
 	m.config = new(APIServerConfig)
 
-	confPath := rtcPath + "/conf/gortc.ini"
+	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
 
 	f, err := ini.Load(confPath)
 	if err != nil {
@@ -82,7 +78,7 @@ func handler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (m *APIServerModule) Init() bool {
-	initLog(m.config, m.rtcPath)
+	initLog(m.config)
 
 	serveMux := &http.ServeMux{}
 	serveMux.HandleFunc("/", handler)
@@ -98,11 +94,7 @@ func (m *APIServerModule) Init() bool {
 			return false
 		}
 
-		if !strings.HasPrefix(m.config.Cert, "/") &&
-			!strings.HasPrefix(m.config.Cert, "./") {
-
-			m.config.Cert = m.rtcPath + m.config.Cert
-		}
+		m.config.Cert = rtclib.RTCPATH + "/certs/" + m.config.Cert
 
 		_, err := os.Stat(m.config.Cert)
 		if err != nil {
@@ -110,11 +102,7 @@ func (m *APIServerModule) Init() bool {
 			return false
 		}
 
-		if !strings.HasPrefix(m.config.Key, "/") &&
-			!strings.HasPrefix(m.config.Key, "./") {
-
-			m.config.Key = m.rtcPath + m.config.Key
-		}
+		m.config.Key = rtclib.RTCPATH + "/certs/" + m.config.Key
 
 		_, err = os.Stat(m.config.Key)
 		if err != nil {

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"rtclib"
-	"strings"
 	"time"
 )
 
@@ -39,17 +38,13 @@ func (handle RTCLogHandle) LogSuffix(loglv int) string {
 	return ""
 }
 
-func initLog(config *RTCServerConfig, rtcPath string) {
-	if !strings.HasPrefix(config.LogPath, "/") &&
-		!strings.HasPrefix(config.LogPath, "./") {
-
-		config.LogPath = rtcPath + config.LogPath
-	}
-
-	logLevel := rtclib.ConfEnum(loglvEnum, config.LogLevel, rtclib.LOGINFO)
+func initLog(config *RTCServerConfig) {
+	logPath := rtclib.RTCPATH + "/logs/rtc.log"
+	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
+		rtclib.LOGINFO)
 
 	rtclogHandle := RTCLogHandle{}
-	rtclog = rtclib.NewLog(rtclogHandle, config.LogPath, logLevel,
+	rtclog = rtclib.NewLog(rtclogHandle, logPath, logLevel,
 		int64(config.LogRotateSize))
 	if rtclog == nil {
 		os.Exit(1)

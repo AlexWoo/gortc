@@ -5,7 +5,7 @@
 package rtclib
 
 type Module interface {
-	LoadConfig(rtcPath string) bool
+	LoadConfig() bool
 	Init() bool
 	Run()
 	Exit()
@@ -21,7 +21,7 @@ func AddModule(name string, module Module) {
 
 func InitModule(log *Log, rtcPath string) {
 	for _, name := range callseq {
-		if !modules[name].LoadConfig(rtcPath) {
+		if !modules[name].LoadConfig() {
 			log.LogFatal("Module %s load config failed", name)
 		}
 

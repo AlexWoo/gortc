@@ -31,6 +31,7 @@ if [ "$RTCPATH" != "./" ];then
     mkdir -p $RTCPATH/logs
     mkdir -p $RTCPATH/slp
     mkdir -p $RTCPATH/api
+    mkdir -p $RTCPATH/certs
 
     install -D bin/* $RTCPATH/bin -S .bak -m 755
 

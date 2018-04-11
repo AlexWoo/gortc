@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"plugin"
+	"rtclib"
 	"time"
 
 	simplejson "github.com/bitly/go-simplejson"
@@ -62,8 +63,8 @@ func slpLoad(name string, slpFile string) bool {
 }
 
 func initSelector() bool {
-	slpm.slpconf = rtcServerModule.rtcPath + rtcServerModule.config.SLPSelector
-	slpm.slpdir = rtcServerModule.rtcPath + "/slp/"
+	slpm.slpconf = rtclib.RTCPATH + rtcServerModule.config.SLPSelector
+	slpm.slpdir = rtclib.RTCPATH + "/slp/"
 
 	f, err := os.Open(slpm.slpconf)
 	defer f.Close()

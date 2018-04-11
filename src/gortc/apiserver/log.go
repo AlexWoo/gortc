@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"rtclib"
-	"strings"
 	"time"
 )
 
@@ -39,17 +38,13 @@ func (handle RTCLogHandle) LogSuffix(loglv int) string {
 	return ""
 }
 
-func initLog(config *APIServerConfig, rtcPath string) {
-	if !strings.HasPrefix(config.LogPath, "/") &&
-		!strings.HasPrefix(config.LogPath, "./") {
-
-		config.LogPath = rtcPath + config.LogPath
-	}
-
-	logLevel := rtclib.ConfEnum(loglvEnum, config.LogLevel, rtclib.LOGINFO)
+func initLog(config *APIServerConfig) {
+	logPath := rtclib.RTCPATH + "/logs/api.log"
+	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
+		rtclib.LOGINFO)
 
 	rtclogHandle := RTCLogHandle{}
-	apilog = rtclib.NewLog(rtclogHandle, config.LogPath, logLevel,
+	apilog = rtclib.NewLog(rtclogHandle, logPath, logLevel,
 		int64(config.LogRotateSize))
 	if apilog == nil {
 		os.Exit(1)

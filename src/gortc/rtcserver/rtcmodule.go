@@ -8,13 +8,11 @@ import (
 	"net/http"
 	"os"
 	"rtclib"
-	"strings"
 
 	"github.com/go-ini/ini"
 )
 
 type RTCServerConfig struct {
-	LogPath       string
 	LogLevel      string
 	LogRotateSize rtclib.Size_t
 	Listen        string
@@ -27,7 +25,6 @@ type RTCServerConfig struct {
 }
 
 type RTCServerModule struct {
-	rtcPath   string
 	config    *RTCServerConfig
 	server    *http.Server
 	tlsServer *http.Server
@@ -41,11 +38,10 @@ func NewRTCServerModule() *RTCServerModule {
 	return rtcServerModule
 }
 
-func (m *RTCServerModule) LoadConfig(rtcPath string) bool {
-	m.rtcPath = rtcPath
+func (m *RTCServerModule) LoadConfig() bool {
 	m.config = new(RTCServerConfig)
 
-	confPath := rtcPath + "/conf/gortc.ini"
+	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
 
 	f, err := ini.Load(confPath)
 	if err != nil {
@@ -57,7 +53,7 @@ func (m *RTCServerModule) LoadConfig(rtcPath string) bool {
 }
 
 func (m *RTCServerModule) Init() bool {
-	initLog(m.config, m.rtcPath)
+	initLog(m.config)
 
 	if !initSelector() {
 		LogError("SLP Selector init error")
@@ -83,11 +79,7 @@ func (m *RTCServerModule) Init() bool {
 			return false
 		}
 
-		if !strings.HasPrefix(m.config.Cert, "/") &&
-			!strings.HasPrefix(m.config.Cert, "./") {
-
-			m.config.Cert = m.rtcPath + m.config.Cert
-		}
+		m.config.Cert = rtclib.RTCPATH + "/certs/" + m.config.Cert
 
 		_, err := os.Stat(m.config.Cert)
 		if err != nil {
@@ -95,11 +87,7 @@ func (m *RTCServerModule) Init() bool {
 			return false
 		}
 
-		if !strings.HasPrefix(m.config.Key, "/") &&
-			!strings.HasPrefix(m.config.Key, "./") {
-
-			m.config.Key = m.rtcPath + m.config.Key
-		}
+		m.config.Key = rtclib.RTCPATH + "/certs/" + m.config.Key
 
 		_, err = os.Stat(m.config.Key)
 		if err != nil {
