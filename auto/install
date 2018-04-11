@@ -34,6 +34,7 @@ if [ "$RTCPATH" != "./" ];then
     mkdir -p $RTCPATH/certs
 
     install -D bin/* $RTCPATH/bin -S .bak -m 755
+    sed -i "s#^rtcpath/.*#rtcpath=$RTCPATH#" $RTCPATH/bin/compile
 
     for f in $confs
     do

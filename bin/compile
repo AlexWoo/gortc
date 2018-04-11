@@ -1,0 +1,14 @@
+if [ $# -ne 1 ];then
+    echo "Usage: $1 plugin_name"
+    exit 1
+fi
+
+rtcpath=/usr/local/gortc
+
+CURDIR=`pwd`
+OLDGOPATH="$GOPATH"
+export GOPATH="$CURDIR"
+
+go build -buildmode=plugin -o $rtcpath/slp/$1.so $1/$1.go
+
+export GOPATH="$OLDGOPATH"
