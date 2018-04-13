@@ -9,6 +9,13 @@ CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
-go build -buildmode=plugin -o $rtcpath/api/$1.so $1/$1.go
+files=`ls $1 |grep -P "^v\d+\.go$"`
+for file in $files;do
+    ver=`echo $file |awk -F '.' '{print $1}'`
+    api=$1.$ver
+    echo $api
+    go build -buildmode=plugin -o $rtcpath/api/$api.so $1/$ver.go
+done
+
 
 export GOPATH="$OLDGOPATH"

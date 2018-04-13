@@ -117,7 +117,7 @@ func updateAPIFile() error {
 		json.Set(k, v)
 	}
 
-	f, err := os.Open(apim.apiconf)
+	f, err := os.OpenFile(apim.apiconf, os.O_TRUNC|os.O_WRONLY, 0644)
 	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("open file %s failed: %v", apim.apiconf, err)

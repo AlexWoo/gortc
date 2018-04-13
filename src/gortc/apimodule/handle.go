@@ -41,7 +41,7 @@ func callAPI(req *http.Request, apiname string, version string,
 }
 
 func handler(w http.ResponseWriter, req *http.Request) {
-	ok, apiname, version, paras := parseUri(req.RequestURI)
+	ok, apiname, version, paras := parseUri(req.URL.Path)
 	if !ok {
 		NewResponse(1, nil, nil, nil).SendResp(w)
 		return

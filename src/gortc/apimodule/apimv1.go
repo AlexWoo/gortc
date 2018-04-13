@@ -4,7 +4,9 @@
 
 package apimodule
 
-import "net/http"
+import (
+	"net/http"
+)
 
 type APIM_V1 struct {
 }
@@ -23,7 +25,7 @@ func (api *APIM_V1) Post(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]RespCode) {
 
 	apiname := paras
-	filename := req.Form.Get("file")
+	filename := req.URL.Query().Get("file")
 
 	return -1, nil, addAPI(apiname, filename), nil
 }
