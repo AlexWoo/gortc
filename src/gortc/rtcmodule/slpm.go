@@ -6,6 +6,7 @@ package rtcmodule
 
 import (
 	"fmt"
+	"gortc/apimodule"
 	"os"
 	"plugin"
 	"rtclib"
@@ -28,15 +29,15 @@ type slpPlugin struct {
 }
 
 type SLPM struct {
-	selector map[string]*slpPlugin
-	slpconf  string
-	slpdir   string
-	slp      map[string]string
+	slps    map[string]*slpPlugin
+	slpconf string
+	slpdir  string
+	plugins map[string]string
 }
 
 var slpm = &SLPM{
-	selector: make(map[string]*slpPlugin),
-	slp:      make(map[string]string),
+	slps:    make(map[string]*slpPlugin),
+	plugins: make(map[string]string),
 }
 
 func slpLoad(name string, slpFile string) bool {
@@ -57,13 +58,13 @@ func slpLoad(name string, slpFile string) bool {
 
 	slp.instance = v.(func(task *Task) SLP)
 
-	slpm.selector[name] = slp
+	slpm.slps[name] = slp
 
 	return true
 }
 
-func initSelector() bool {
-	slpm.slpconf = rtclib.RTCPATH + module.config.SLPSelector
+func initSLPM() bool {
+	slpm.slpconf = rtclib.RTCPATH + "/conf/.slps"
 	slpm.slpdir = rtclib.RTCPATH + "/slp/"
 
 	f, err := os.Open(slpm.slpconf)
@@ -81,29 +82,31 @@ func initSelector() bool {
 
 	j, err := json.Map()
 	if err != nil {
-		LogError("selector file %s format error: %v", slpm.slpconf, err)
+		LogError("slp file %s format error: %v", slpm.slpconf, err)
 		return false
 	}
 
 	for name, _ := range j {
 		path, err := json.Get(name).String()
 		if err != nil {
-			LogError("select %s format error: %v", name, err)
+			LogError("slp %s format error: %v", name, err)
 			return false
 		}
 
 		if !slpLoad(name, path) {
 			return false
 		}
-		slpm.slp[name] = path
+		slpm.plugins[name] = path
 	}
+
+	apimodule.AddInternalAPI("slpm.v1", Slpmv1)
 
 	return true
 }
 
 func updateSLPFile() error {
 	json := simplejson.New()
-	for k, v := range slpm.slp {
+	for k, v := range slpm.plugins {
 		json.Set(k, v)
 	}
 
@@ -128,7 +131,7 @@ func addSLP(name string, slpFile string) string {
 		return fmt.Sprintf("Load SLP %s %s failed\n", name, slpFile)
 	}
 
-	slpm.slp[name] = slpFile
+	slpm.plugins[name] = slpFile
 
 	err := updateSLPFile()
 	if err != nil {
@@ -140,8 +143,8 @@ func addSLP(name string, slpFile string) string {
 }
 
 func delSLP(name string) string {
-	delete(slpm.slp, name)
-	delete(slpm.selector, name)
+	delete(slpm.plugins, name)
+	delete(slpm.slps, name)
 
 	err := updateSLPFile()
 	if err != nil {
@@ -153,7 +156,7 @@ func delSLP(name string) string {
 }
 
 func getSLP(t *Task) SLP {
-	p := slpm.selector[t.name]
+	p := slpm.slps[t.name]
 	if p == nil {
 		LogError("SLP %s not exist", t.name)
 		return nil
@@ -164,7 +167,7 @@ func getSLP(t *Task) SLP {
 }
 
 func endSLP(t *Task) {
-	p := slpm.selector[t.name]
+	p := slpm.slps[t.name]
 	if p == nil { // SLP has been deleted
 		return
 	}
@@ -176,7 +179,7 @@ func endSLP(t *Task) {
 func listSLP() string {
 	ret := "slp\t\tused\t\tusing\t\tfile\t\ttime\n"
 	ret += "------------------------------------------------------------\n"
-	for _, v := range slpm.selector {
+	for _, v := range slpm.slps {
 		ret += fmt.Sprintf("%s\t%d\t%d\t%s\t%s\n", v.name, v.used, v.using,
 			v.file, v.time.Format("2006-01-02 15:04:05.000"))
 	}

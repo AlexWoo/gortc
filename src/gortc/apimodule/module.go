@@ -7,7 +7,6 @@ package apimodule
 import (
 	"net/http"
 	"os"
-	"regexp"
 	"rtclib"
 
 	"github.com/go-ini/ini"
@@ -50,35 +49,13 @@ func (m *APIModule) LoadConfig() bool {
 	return rtclib.Config(f, "APIModule", m.config)
 }
 
-func parseUri(uri string) (bool, string, string, string) {
-	reg := regexp.MustCompile(`^/(\w+)/(v\d+)/(.+)`)
-
-	match := reg.FindStringSubmatch(uri)
-	if len(match) == 0 {
-		return false, "", "", ""
-	}
-
-	return true, match[1], match[2], match[3]
-}
-
-func callAPI(req *http.Request, apiname string, version string,
-	paras string) (int, *map[string]string, interface{}, *map[int]RespCode) {
-
-	return 0, nil, nil, nil
-}
-
-func handler(w http.ResponseWriter, req *http.Request) {
-	ok, apiname, version, paras := parseUri(req.RequestURI)
-	if !ok {
-		NewResponse(1, nil, nil, nil).SendResp(w)
-		return
-	}
-
-	NewResponse(callAPI(req, apiname, version, paras)).SendResp(w)
-}
-
 func (m *APIModule) Init() bool {
 	initLog(m.config)
+
+	if !initAPIM() {
+		LogError("init API Manager failed")
+		return false
+	}
 
 	serveMux := &http.ServeMux{}
 	serveMux.HandleFunc("/", handler)

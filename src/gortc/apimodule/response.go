@@ -13,12 +13,14 @@ import (
 )
 
 var syscode = map[int]RespCode{
-	0: {Status: 200, Msg: "OK"},
-	1: {Status: 404, Msg: "Invalid uri format"},
-	2: {Status: 404, Msg: "Unsuppoted API"},
-	3: {Status: 500, Msg: "API Error"},
-	4: {Status: 500, Msg: "Unsuppoted err code"},
-	5: {Status: 500, Msg: "Unsuppoted ret body"},
+	-1: {Status: 200, Msg: ""},
+	0:  {Status: 200, Msg: "OK"},
+	1:  {Status: 404, Msg: "Invalid uri format"},
+	2:  {Status: 404, Msg: "Unsuppoted Method"},
+	3:  {Status: 404, Msg: "Unsuppoted API"},
+	4:  {Status: 500, Msg: "API Error"},
+	5:  {Status: 500, Msg: "Unsuppoted err code"},
+	6:  {Status: 500, Msg: "Unsuppoted ret body"},
 }
 
 type RespCode struct {
@@ -76,14 +78,14 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 		return
 	}
 
-	typ := reflect.ValueOf(body).Kind().String()
+	typ := reflect.ValueOf(body).Kind()
 
-	if typ == "string" {
-		resp.body.Set("msg", reflect.ValueOf(body).String())
+	if typ == reflect.String {
+		resp.body.Set("msg", body)
 		return
 	}
 
-	if typ == "map" {
+	if typ == reflect.Map {
 		for _, k := range reflect.ValueOf(body).MapKeys() {
 			key := strings.ToLower(k.String())
 			val := reflect.ValueOf(body).MapIndex(k).Interface()
@@ -92,7 +94,7 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 		return
 	}
 
-	if typ == "struct" {
+	if typ == reflect.Struct {
 		t := reflect.TypeOf(body)
 		v := reflect.ValueOf(body)
 		for i := 0; i < t.NumField(); i++ {
@@ -121,6 +123,12 @@ func (resp *Response) SendResp(w http.ResponseWriter) {
 	w.WriteHeader(resp.status)
 
 	// send body
-	body, _ := resp.body.MarshalJSON()
-	w.Write(body)
+	code, _ := resp.body.Get("code").Int()
+	if code == -1 {
+		body, _ := resp.body.Get("msg").Bytes()
+		w.Write(body)
+	} else {
+		body, _ := resp.body.MarshalJSON()
+		w.Write(body)
+	}
 }

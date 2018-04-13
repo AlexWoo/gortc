@@ -21,7 +21,6 @@ type RTCModuleConfig struct {
 	Key           string
 	Location      string `default:"/rtc"`
 	Realm         string
-	SLPSelector   string `default:"/conf/.slps"`
 }
 
 type RTCModule struct {
@@ -55,8 +54,8 @@ func (m *RTCModule) LoadConfig() bool {
 func (m *RTCModule) Init() bool {
 	initLog(m.config)
 
-	if !initSelector() {
-		LogError("SLP Selector init error")
+	if !initSLPM() {
+		LogError("SLP Manager init error")
 		return false
 	}
 
