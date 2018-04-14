@@ -63,8 +63,17 @@ func apiLoad(name string, apiFile string) bool {
 		return false
 	}
 
-	api.instance = v.(func() API)
+	defer func() {
+		if err := recover(); err != nil {
+			LogError("load %s %s failed: %v", name, path, err)
+			if apim.plugins[name] == "" {
+				delete(apim.plugins, name)
+				updateAPIFile()
+			}
+		}
+	}()
 
+	api.instance = v.(func() API)
 	apim.apis[name] = api
 
 	return true
