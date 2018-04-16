@@ -52,7 +52,18 @@ func slpLoad(name string, slpFile string) bool {
 		return false
 	}
 
+	defer func() {
+		if err := recover(); err != nil {
+			LogError("load %s %s failed: %v", name, path, err)
+			if slpm.plugins[name] == "" {
+				delete(slpm.plugins, name)
+				updateSLPFile()
+			}
+		}
+	}()
+
 	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
+	slp.time = time.Now()
 	slpm.slps[name] = slp
 
 	return true
@@ -105,7 +116,7 @@ func updateSLPFile() error {
 		json.Set(k, v)
 	}
 
-	f, err := os.Open(slpm.slpconf)
+	f, err := os.OpenFile(slpm.slpconf, os.O_TRUNC|os.O_WRONLY, 0644)
 	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("open file %s failed: %v", slpm.slpconf, err)
