@@ -14,7 +14,7 @@ for file in $files;do
     ver=`echo $file |awk -F '.' '{print $1}'`
     api=$1.$ver
     echo "apicompile $rtcpath/api/$api.so $1/$ver.go"
-    go build -x -ldflags "-pluginpath=$1.$ver" -buildmode=plugin -o $rtcpath/api/$api.so $1/$ver.go
+    go build -x -ldflags "-pluginpath=$1_$ver" -buildmode=plugin -o $rtcpath/api/$api.so $1/$ver.go
 done
 
 
