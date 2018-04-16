@@ -5,6 +5,7 @@
 package rtcmodule
 
 import (
+	"fmt"
 	"gortc/apimodule"
 	"net/http"
 )
@@ -26,8 +27,9 @@ func (api *SLPM_V1) Post(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
 
 	apiname := paras
-	filename := req.Form.Get("file")
+	filename := req.URL.Query().Get("file")
 
+	fmt.Println(apiname, filename)
 	return -1, nil, addSLP(apiname, filename), nil
 }
 

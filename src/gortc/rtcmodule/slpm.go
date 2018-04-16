@@ -15,17 +15,13 @@ import (
 	simplejson "github.com/bitly/go-simplejson"
 )
 
-type SLP interface {
-	Process(jsip *JSIP) int
-}
-
 type slpPlugin struct {
 	name     string
 	used     uint64
 	using    uint64
 	file     string
 	time     time.Time
-	instance func(task *Task) SLP
+	instance func(task *rtclib.Task) rtclib.SLP
 }
 
 type SLPM struct {
@@ -56,8 +52,7 @@ func slpLoad(name string, slpFile string) bool {
 		return false
 	}
 
-	slp.instance = v.(func(task *Task) SLP)
-
+	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
 	slpm.slps[name] = slp
 
 	return true
@@ -155,10 +150,10 @@ func delSLP(name string) string {
 	return fmt.Sprintf("Delete SLP %s successd\n", name)
 }
 
-func getSLP(t *Task) SLP {
-	p := slpm.slps[t.name]
+func getSLP(t *rtclib.Task) rtclib.SLP {
+	p := slpm.slps[t.Name]
 	if p == nil {
-		LogError("SLP %s not exist", t.name)
+		LogError("SLP %s not exist", t.Name)
 		return nil
 	}
 	p.using++
@@ -166,8 +161,8 @@ func getSLP(t *Task) SLP {
 	return p.instance(t)
 }
 
-func endSLP(t *Task) {
-	p := slpm.slps[t.name]
+func endSLP(t *rtclib.Task) {
+	p := slpm.slps[t.Name]
 	if p == nil { // SLP has been deleted
 		return
 	}

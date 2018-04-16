@@ -9,6 +9,7 @@ CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
-go build -buildmode=plugin -o $rtcpath/slp/$1.so $1/$1.go
+echo "slpcompile $rtcpath/slp/$1.so $1/$1.go"
+go build -x -ldflags "-pluginpath=$1" -buildmode=plugin -o $rtcpath/slp/$1.so $1/$1.go
 
 export GOPATH="$OLDGOPATH"

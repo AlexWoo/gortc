@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"rtclib"
+	"strings"
 
 	"github.com/go-ini/ini"
 )
@@ -30,6 +31,42 @@ type RTCModule struct {
 }
 
 var module *RTCModule
+
+func process(jsip *rtclib.JSIP) {
+	dlg := jsip.DialogueID
+	t := rtclib.GetTask(dlg)
+	if t != nil {
+		t.Process(jsip)
+		return
+	}
+
+	slpname := "default"
+
+	if len(jsip.Router) != 0 {
+		router0 := jsip.Router[0]
+		_, _, paras := rtclib.JsipParseUri(router0)
+
+		for _, para := range paras {
+			if strings.HasPrefix(para, "type=") {
+				ss := strings.SplitN(para, "=", 2)
+				if ss[1] != "" {
+					slpname = ss[1]
+				}
+			}
+		}
+	}
+
+	t = rtclib.NewTask(dlg)
+	t.Name = slpname
+	slp := getSLP(t)
+	if slp == nil {
+		t.DelTask()
+		return
+	}
+
+	t.SLP = slp
+	t.Process(jsip)
+}
 
 func NewRTCModule() *RTCModule {
 	module = &RTCModule{}
@@ -65,7 +102,7 @@ func (m *RTCModule) Init() bool {
 	}
 
 	serveMux := &http.ServeMux{}
-	serveMux.HandleFunc(m.config.Location, rtcserver)
+	serveMux.HandleFunc(m.config.Location, rtclib.RTCServer)
 
 	if m.config.Listen != "" {
 		m.server = &http.Server{Addr: m.config.Listen, Handler: serveMux}

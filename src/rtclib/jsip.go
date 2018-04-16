@@ -2,7 +2,7 @@
 //
 // RTC Json SIP
 
-package rtcmodule
+package rtclib
 
 import (
 	"encoding/json"
@@ -214,6 +214,18 @@ var (
 	Jsessions     = make(map[string]*JSIPSession)
 )
 
+var (
+	jsipHandle  func(jsip *JSIP)
+	rtclog      *Log
+	realm       string
+	rtclocation string
+)
+
+func InitHandler(h func(jsip *JSIP), log *Log) {
+	jsipHandle = h
+	rtclog = log
+}
+
 func transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
@@ -271,11 +283,11 @@ func SendJSIPReq(req *JSIP, dlg string) {
 		}
 
 		if target == "" {
-			LogError("Router or RequestURI is nil when send new request")
+			rtclog.LogError("Router or RequestURI is nil when send new request")
 			return
 		}
 
-		conn = rtcclient(target)
+		conn = RTCClient(target)
 		if conn == nil {
 			return
 		}
@@ -290,7 +302,7 @@ func SendJSIPReq(req *JSIP, dlg string) {
 
 func SendJSIPRes(req *JSIP, code int) {
 	if req.Code != 0 {
-		LogError("Cannot send response for response")
+		rtclog.LogError("Cannot send response for response")
 		return
 	}
 
@@ -332,7 +344,7 @@ func SendJSIPBye(session *JSIPSession) {
 
 func SendJSIPCancel(session *JSIPSession, req *JSIP) {
 	if req.Type >= 100 {
-		LogError("Cannot cancel response")
+		rtclog.LogError("Cannot cancel response")
 		return
 	}
 
@@ -500,7 +512,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
-			LogError("process %s but trans is nil", JsipName(jsip))
+			rtclog.LogError("process %s but trans is nil", JsipName(jsip))
 			return ERROR
 		}
 
@@ -524,7 +536,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
-				LogInfo("ACK miss RelatedID")
+				rtclog.LogInfo("ACK miss RelatedID")
 				return IGNORE
 			}
 
@@ -532,7 +544,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			tid = transactionID(jsip, rid)
 			ackTrans := Jtransactions[tid]
 			if ackTrans == nil {
-				LogInfo("Transaction INVITE not exist")
+				rtclog.LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
@@ -542,7 +554,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		if jsip.Type == CANCEL {
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
-				LogInfo("CANCEL miss RelatedID")
+				rtclog.LogInfo("CANCEL miss RelatedID")
 				return IGNORE
 			}
 
@@ -550,12 +562,12 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			tid = transactionID(jsip, rid)
 			cancelTrans := Jtransactions[tid]
 			if cancelTrans == nil {
-				LogInfo("Transaction Cancelled not exist")
+				rtclog.LogInfo("Transaction Cancelled not exist")
 				return IGNORE
 			}
 
 			if cancelTrans.state == TRANS_FINALRESP {
-				LogInfo("Transaction in finalize response, cannot cancel")
+				rtclog.LogInfo("Transaction in finalize response, cannot cancel")
 				return IGNORE
 			}
 
@@ -574,7 +586,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
-		LogError("process %s but trans exist", JsipName(jsip))
+		rtclog.LogError("process %s but trans exist", JsipName(jsip))
 		return ERROR
 	}
 
@@ -582,13 +594,13 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	if trans.uatype == UAS && sendrecv == RECV ||
 		trans.uatype == UAC && sendrecv == SEND {
 
-		LogError("Response direct is same as Request direct")
+		rtclog.LogError("Response direct is same as Request direct")
 		return ERROR
 	}
 
 	if jsip.Code == 100 {
 		if trans.state > TRANS_TRYING {
-			LogError("process 100 Trying but state is %d", trans.state)
+			rtclog.LogError("process 100 Trying but state is %d", trans.state)
 			return ERROR
 		}
 
@@ -601,7 +613,8 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 	if jsip.Code < 200 && jsip.Code > 100 {
 		if trans.state > TRANS_PR {
-			LogError("process %s but state is %d", JsipName(jsip), trans.state)
+			rtclog.LogError("process %s but state is %d", JsipName(jsip),
+				trans.state)
 			return ERROR
 		}
 
@@ -611,7 +624,8 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if trans.state == TRANS_FINALRESP {
-		LogError("process %s but state is %d", JsipName(jsip), trans.state)
+		rtclog.LogError("process %s but state is %d", JsipName(jsip),
+			trans.state)
 		return ERROR
 	}
 
@@ -736,7 +750,7 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 		}
 	}
 
-	LogError("%s %s in %s", jsipDirect[sendrecv], JsipName(jsip),
+	rtclog.LogError("%s %s in %s", jsipDirect[sendrecv], JsipName(jsip),
 		jsipInviteState[session.state])
 
 	return ERROR
@@ -750,7 +764,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 	switch session.state {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
-			LogError("Recv response %s but session state is DEFAULT_INIT",
+			rtclog.LogError("Recv response %s but session state is DEFAULT_INIT",
 				JsipName(jsip))
 			return ERROR
 		}
@@ -759,7 +773,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 			session.typ != OPTIONS && session.typ != MESSAGE &&
 			session.typ != SUBSCRIBE {
 
-			LogError("Session not exist when process msg %s", JsipName(jsip))
+			rtclog.LogError("Session not exist when process msg %s", JsipName(jsip))
 			if sendrecv == RECV {
 				SendJSIPRes(jsip, 481)
 			}
@@ -770,7 +784,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 
 	case DEFAULT_REQ:
 		if jsip.Code == 0 {
-			LogError("Recv request %s but session state is DEFAULT_REQ",
+			rtclog.LogError("Recv request %s but session state is DEFAULT_REQ",
 				JsipName(jsip))
 			return ERROR
 		}
@@ -787,7 +801,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 	session := Jsessions[jsip.DialogueID]
 	if session == nil {
 		if jsip.Code != 0 {
-			LogError("recv response but session is nil")
+			rtclog.LogError("recv response but session is nil")
 			return IGNORE
 		}
 
@@ -821,10 +835,10 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 	}
 
 	if sendrecv == RECV {
-		LogInfo("RTC read message: %s %v", JsipName(jsip), jsip)
-		TaskProcess(jsip)
+		rtclog.LogInfo("RTC read message: %s %v", JsipName(jsip), jsip)
+		jsipHandle(jsip)
 	} else {
-		LogInfo("RTC write message: %s %v", JsipName(jsip), jsip)
+		rtclog.LogInfo("RTC write message: %s %v", JsipName(jsip), jsip)
 		session.conn.WriteJSON(jsip.RawMsg)
 	}
 
@@ -845,7 +859,7 @@ func RecvJSIPMsg(conn *websocket.Conn, data []byte) bool {
 	// Syntax Layer
 	jsip, err := jsipUnParser(data)
 	if err != nil {
-		LogError("UnParser Json sip message failed, msg: %s err: %v",
+		rtclog.LogError("UnParser Json sip message failed, msg: %s err: %v",
 			string(data), err)
 		return false
 	}
@@ -871,7 +885,7 @@ func SendJsonSIPMsg(conn *websocket.Conn, jsip *JSIP) {
 	// Syntax Layer
 	j, err := jsipPrepared(jsip)
 	if err != nil {
-		LogError("Prepared Json sip message failed, err %v", err)
+		rtclog.LogError("Prepared Json sip message failed, err %v", err)
 		return
 	}
 

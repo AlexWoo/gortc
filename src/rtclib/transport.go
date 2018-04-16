@@ -2,7 +2,7 @@
 //
 // RTC Transport layer
 
-package rtcmodule
+package rtclib
 
 import (
 	"net/http"
@@ -27,7 +27,7 @@ func readloop(name string, conn *websocket.Conn) {
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			LogError("RTC read message error, %v", err)
+			rtclog.LogError("RTC read message error, %v", err)
 			break
 		}
 
@@ -45,17 +45,17 @@ func wsCheckOrigin(r *http.Request) bool {
 	return true
 }
 
-func rtcserver(w http.ResponseWriter, req *http.Request) {
+func RTCServer(w http.ResponseWriter, req *http.Request) {
 	userid := req.URL.Query().Get("userid")
 	if userid == "" {
-		LogError("Miss userid")
+		rtclog.LogError("Miss userid")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		LogError("Create Websocket server failed, %v", err)
+		rtclog.LogError("Create Websocket server failed, %v", err)
 		return
 	}
 
@@ -64,18 +64,17 @@ func rtcserver(w http.ResponseWriter, req *http.Request) {
 	readloop(userid, conn)
 }
 
-func rtcclient(target string) *websocket.Conn {
+func RTCClient(target string) *websocket.Conn {
 	conn := transports[target]
 	if conn != nil {
 		return conn
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + module.config.Location + "?userid=" +
-		module.config.Realm
+	url := "http://" + target + rtclocation + "?userid=" + realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
-		LogError("Connect to %s failed", url)
+		rtclog.LogError("Connect to %s failed", url)
 		return nil
 	}
 
