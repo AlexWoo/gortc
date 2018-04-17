@@ -60,6 +60,7 @@ func process(jsip *rtclib.JSIP) {
 	t.Name = slpname
 	slp := getSLP(t)
 	if slp == nil {
+		rtclib.SendJSIPRes(jsip, 404)
 		t.DelTask()
 		return
 	}
@@ -95,6 +96,8 @@ func (m *RTCModule) Init() bool {
 		LogError("SLP Manager init error")
 		return false
 	}
+
+	rtclib.InitHandler(process, log, m.config.Realm, m.config.Location)
 
 	if m.config.Realm == "" {
 		LogError("Local Realm not configured")

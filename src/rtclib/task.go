@@ -37,6 +37,7 @@ func (t *Task) NewDialogueID() string {
 
 func (t *Task) DelTask() {
 	for _, dlg := range t.dlgs {
+		delete(Jsessions, dlg)
 		delete(tasks, dlg)
 	}
 }

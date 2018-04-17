@@ -221,9 +221,11 @@ var (
 	rtclocation string
 )
 
-func InitHandler(h func(jsip *JSIP), log *Log) {
+func InitHandler(h func(jsip *JSIP), log *Log, rlm string, location string) {
 	jsipHandle = h
 	rtclog = log
+	realm = rlm
+	rtclocation = location
 }
 
 func transactionID(jsip *JSIP, cseq uint64) string {
@@ -257,7 +259,7 @@ func JsipParseUri(uri string) (string, string, []string) {
 func JsipName(jsip *JSIP) string {
 	req := jsipReqParse[jsip.Type]
 	if req == "" {
-		return ""
+		req = "UNKNOWN"
 	}
 
 	if jsip.Code == 0 {
@@ -374,6 +376,10 @@ func jsipPrepared(jsip *JSIP) (*JSIP, error) {
 
 	if jsip.Code != 0 && (jsip.Code < 100 || jsip.Code > 699) {
 		return nil, fmt.Errorf("Unknown response %s", JsipName(jsip))
+	}
+
+	if jsip.RawMsg == nil {
+		jsip.RawMsg = make(map[string]interface{})
 	}
 
 	session := Jsessions[jsip.DialogueID]
@@ -502,6 +508,13 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 
 	jsip.Body = json.Get("Body")
 
+	session := Jsessions[jsip.DialogueID]
+	if session != nil {
+		if jsip.Code == 0 && jsip.CSeq > session.cseq {
+			session.cseq = jsip.CSeq
+		}
+	}
+
 	return jsip, nil
 }
 
@@ -570,16 +583,6 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 				rtclog.LogInfo("Transaction in finalize response, cannot cancel")
 				return IGNORE
 			}
-
-			if sendrecv == RECV {
-				// send CANCEL 200 and REQ 487
-				SendJSIPRes(jsip, 200)
-				SendJSIPRes(cancelTrans.req, 487)
-			}
-		}
-
-		if jsip.Type == BYE && sendrecv == RECV {
-			SendJSIPRes(jsip, 200)
 		}
 
 		return OK
@@ -719,6 +722,12 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 		if jsip.Type == ACK {
 			session.state = INVITE_ACK
 			return OK
+		} else if jsip.Type == BYE {
+			if sendrecv == RECV {
+				SendJSIPRes(jsip, 200)
+			}
+			session.state = INVITE_END
+			return OK
 		}
 	case INVITE_ACK:
 		switch {
@@ -728,6 +737,9 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 				return OK
 			}
 		case jsip.Type == BYE:
+			if sendrecv == RECV {
+				SendJSIPRes(jsip, 200)
+			}
 			session.state = INVITE_END
 			return OK
 		case jsip.Type == INFO: // INFO and INFO 200
@@ -737,10 +749,22 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 		if jsip.Code == 200 && jsip.Type == INVITE {
 			session.state = INVITE_RE200
 			return OK
+		} else if jsip.Type == BYE {
+			if sendrecv == RECV {
+				SendJSIPRes(jsip, 200)
+			}
+			session.state = INVITE_END
+			return OK
 		}
 	case INVITE_RE200:
 		if jsip.Type == ACK {
 			session.state = INVITE_ACK
+			return OK
+		} else if jsip.Type == BYE {
+			if sendrecv == RECV {
+				SendJSIPRes(jsip, 200)
+			}
+			session.state = INVITE_END
 			return OK
 		}
 	case INVITE_ERR:
@@ -774,6 +798,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 			session.typ != SUBSCRIBE {
 
 			rtclog.LogError("Session not exist when process msg %s", JsipName(jsip))
+			session.state = DEFAULT_REQ
 			if sendrecv == RECV {
 				SendJSIPRes(jsip, 481)
 			}
@@ -809,6 +834,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 			conn: conn,
 			typ:  jsip.Type,
 			req:  jsip,
+			cseq: jsip.CSeq,
 		}
 
 		Jsessions[jsip.DialogueID] = session
@@ -818,6 +844,8 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 		} else {
 			session.uatype = UAC
 		}
+
+		fmt.Println(session.typ, INVITE)
 
 		switch session.typ {
 		case INVITE:
@@ -834,11 +862,19 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 		return ERROR
 	}
 
+	if jsip.Type == CANCEL && jsip.Code == 0 && sendrecv == RECV {
+		relatedid, _ := jsip.RawMsg["RelatedID"]
+		rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
+		tid := transactionID(jsip, rid)
+		cancelTrans := Jtransactions[tid]
+		// send CANCEL 200 and REQ 487
+		SendJSIPRes(jsip, 200)
+		SendJSIPRes(cancelTrans.req, 487)
+	}
+
 	if sendrecv == RECV {
-		rtclog.LogInfo("RTC read message: %s %v", JsipName(jsip), jsip)
 		jsipHandle(jsip)
 	} else {
-		rtclog.LogInfo("RTC write message: %s %v", JsipName(jsip), jsip)
 		session.conn.WriteJSON(jsip.RawMsg)
 	}
 

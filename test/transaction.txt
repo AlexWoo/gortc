@@ -1,0 +1,64 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "INVITE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "RelatedID": 1,
+        "CSeq": 1,
+        "Router": "a.test.com;type=slpdemo, b.test.com",
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "CANCEL",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "RelatedID": 1,
+        "CSeq": 2,
+        "Router": "a.test.com;type=slpdemo, b.test.com",
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 2
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 487,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "ACK",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "RelatedID": 1,
+        "CSeq": 3
+    }
+}
+
+]
