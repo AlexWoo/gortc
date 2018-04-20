@@ -13,7 +13,7 @@ import (
 
 type Config struct {
     JanusAddr       string
-    MaxConcurrent   int
+    MaxConcurrent   uint64
 }
 
 type session struct {

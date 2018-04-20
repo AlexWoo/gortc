@@ -11,7 +11,7 @@ import (
 
 type janusItem struct {
     janusConn   *janus.Janus
-    numSess      int
+    numSess      uint64
 }
 
 type janusHeap []*janusItem
