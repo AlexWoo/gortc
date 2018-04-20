@@ -12,8 +12,8 @@ import (
 
 
 type Config struct {
-    janusAddr       string
-    maxConcurrent   int
+    JanusAddr       string
+    MaxConcurrent   int
 }
 
 type session struct {
@@ -58,12 +58,12 @@ func (vr *Videoroom) loadConfig() bool {
 }
 
 func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
-    if vr.jh.Len() > 0 && (*vr.jh)[0].numSess < vr.config.maxConcurrent {
+    if vr.jh.Len() > 0 && (*vr.jh)[0].numSess < vr.config.MaxConcurrent {
         (*vr.jh)[0].numSess += 1
         return (*vr.jh)[0].janusConn
     }
 
-    j := janus.NewJanus(vr.config.janusAddr)
+    j := janus.NewJanus(vr.config.JanusAddr)
     go j.WaitMsg()
 
     wait := 0
