@@ -138,7 +138,7 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         // vr.getRoom()
         // vr.joinRoom()
         // vr.offer()
-        resp := &JSIP{
+        resp := &rtclib.JSIP{
             Type:       jsip.Type,
             Code:       200,
             From:       jsip.From,
@@ -146,10 +146,9 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
             CSeq:       jsip.CSeq,
             DialogueID: jsip.DialogueID,
             RawMsg:     make(map[string]interface{}),
-            Body:       "create sess " + sess.id +
         }
 
-        SendJsonSIPMsg(nil, resp)
+        rtclib.SendJsonSIPMsg(nil, resp)
     case rtclib.ACK:
         rtclib.SendJSIPBye(rtclib.Jsessions[jsip.DialogueID])
     }
