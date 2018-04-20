@@ -10,6 +10,6 @@ OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
 echo "slpcompile $rtcpath/slp/$1.so $1/$1.go"
-go build -ldflags "-pluginpath=$1" -buildmode=plugin -o $rtcpath/slp/$1.so $1/$1.go
+go build -ldflags "-pluginpath=$1" -buildmode=plugin -o $rtcpath/slp/$1.so $1/*.go
 
 export GOPATH="$OLDGOPATH"
