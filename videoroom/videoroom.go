@@ -60,10 +60,13 @@ func (vr *Videoroom) loadConfig() bool {
 func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     if vr.jh.Len() > 0 && (*vr.jh)[0].numSess < vr.config.MaxConcurrent {
         (*vr.jh)[0].numSess += 1
+        fmt.Printf("use a cached janus instance with numSess %d",
+                   (*vr.jh)[0].numSess)
         return (*vr.jh)[0].janusConn
     }
 
     j := janus.NewJanus(vr.config.JanusAddr)
+    fmt.Printf("connectd to server %s", vr.config.JanusAddr)
     go j.WaitMsg()
 
     wait := 0
@@ -79,6 +82,7 @@ func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     }
 
     heap.Push(vr.jh, &janusItem{janusConn: j, numSess: 1})
+    fmt.Printf("created a new janus instance")
 
     return j
 }
@@ -107,6 +111,8 @@ func (s *session) newSession() {
 
     msg.Janus = "create"
     msg.Transaction = tid
+
+    fmt.Printf("create new Janus session")
 
     j.Send(msg)
     reqChan, ok := j.MsgChan(tid)
