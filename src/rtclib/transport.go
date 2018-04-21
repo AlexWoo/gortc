@@ -7,18 +7,19 @@ package rtclib
 import (
 	"net/http"
 
+	"github.com/go-ini/ini"
 	"github.com/gorilla/websocket"
 )
 
 type JSIPConfig struct {
-	Realm string
+	Location string `default:"rtc"`
+	Realm    string
 }
 
 type JSIPStack struct {
-	config     JSIPConfig
+	config     *JSIPConfig
 	jsipHandle func(jsip *JSIP)
 	log        *Log
-	location   string
 }
 
 var upgrader = websocket.Upgrader{
@@ -31,11 +32,24 @@ var jstack *JSIPStack
 
 var transports = make(map[string]*websocket.Conn)
 
-func InitJSIPStack(h func(jsip *JSIP), log *Log, location string) *JSIPStack {
+func (stack *JSIPStack) LoadConfig() bool {
+	stack.config = new(JSIPConfig)
+
+	confPath := RTCPATH + "/conf/gortc.ini"
+
+	f, err := ini.Load(confPath)
+	if err != nil {
+		jstack.log.LogError("Load config file %s error: %v", confPath, err)
+		return false
+	}
+
+	return Config(f, "JSIPStack", stack.config)
+}
+
+func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
 	jstack = &JSIPStack{
 		jsipHandle: h,
 		log:        log,
-		location:   location,
 	}
 
 	return jstack
@@ -68,7 +82,7 @@ func wsCheckOrigin(r *http.Request) bool {
 	return true
 }
 
-func RTCServer(w http.ResponseWriter, req *http.Request) {
+func (stack *JSIPStack) RTCServer(w http.ResponseWriter, req *http.Request) {
 	userid := req.URL.Query().Get("userid")
 	if userid == "" {
 		jstack.log.LogError("Miss userid")
@@ -87,14 +101,15 @@ func RTCServer(w http.ResponseWriter, req *http.Request) {
 	readloop(userid, conn)
 }
 
-func RTCClient(target string) *websocket.Conn {
+func (stack *JSIPStack) RTCClient(target string) *websocket.Conn {
 	conn := transports[target]
 	if conn != nil {
 		return conn
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + jstack.location + "?userid=" + jstack.config.Realm
+	url := "http://" + target + jstack.config.Location +
+		"?userid=" + jstack.config.Realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		jstack.log.LogError("Connect to %s failed", url)
@@ -106,4 +121,8 @@ func RTCClient(target string) *websocket.Conn {
 	go readloop(target, conn)
 
 	return conn
+}
+
+func (stack *JSIPStack) Location() string {
+	return stack.config.Location
 }

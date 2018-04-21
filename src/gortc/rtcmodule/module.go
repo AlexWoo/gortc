@@ -20,7 +20,6 @@ type RTCModuleConfig struct {
 	TlsListen     string
 	Cert          string
 	Key           string
-	Location      string `default:"/rtc"`
 }
 
 type RTCModule struct {
@@ -97,14 +96,14 @@ func (m *RTCModule) Init() bool {
 		return false
 	}
 
-	m.jstack = rtclib.InitJSIPStack(process, log, m.config.Location)
+	m.jstack = rtclib.InitJSIPStack(process, log)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false
 	}
 
 	serveMux := &http.ServeMux{}
-	serveMux.HandleFunc(m.config.Location, rtclib.RTCServer)
+	serveMux.HandleFunc(m.jstack.Location(), m.jstack.RTCServer)
 
 	if m.config.Listen != "" {
 		m.server = &http.Server{Addr: m.config.Listen, Handler: serveMux}

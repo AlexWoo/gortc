@@ -275,7 +275,7 @@ func SendJSIPReq(req *JSIP, dlg string) {
 			return
 		}
 
-		conn = RTCClient(target)
+		conn = jstack.RTCClient(target)
 		if conn == nil {
 			return
 		}
