@@ -27,7 +27,7 @@ var tasks = make(map[string]*Task)
 
 func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV1()
-	dlg := realm + u1.String()
+	dlg := jstack.config.Realm + u1.String()
 
 	t.dlgs = append(t.dlgs, dlg)
 	tasks[dlg] = t

@@ -10,13 +10,36 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type JSIPConfig struct {
+	Realm string
+}
+
+type JSIPStack struct {
+	config     JSIPConfig
+	jsipHandle func(jsip *JSIP)
+	log        *Log
+	location   string
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  64 * 1024,
 	WriteBufferSize: 64 * 1024,
 	CheckOrigin:     wsCheckOrigin,
 }
 
+var jstack *JSIPStack
+
 var transports = make(map[string]*websocket.Conn)
+
+func InitJSIPStack(h func(jsip *JSIP), log *Log, location string) *JSIPStack {
+	jstack = &JSIPStack{
+		jsipHandle: h,
+		log:        log,
+		location:   location,
+	}
+
+	return jstack
+}
 
 func writemsg(conn *websocket.Conn, jsip *JSIP) {
 	// TODO Error when sending msg
@@ -27,7 +50,7 @@ func readloop(name string, conn *websocket.Conn) {
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			rtclog.LogError("RTC read message error, %v", err)
+			jstack.log.LogError("RTC read message error, %v", err)
 			break
 		}
 
@@ -48,14 +71,14 @@ func wsCheckOrigin(r *http.Request) bool {
 func RTCServer(w http.ResponseWriter, req *http.Request) {
 	userid := req.URL.Query().Get("userid")
 	if userid == "" {
-		rtclog.LogError("Miss userid")
+		jstack.log.LogError("Miss userid")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		rtclog.LogError("Create Websocket server failed, %v", err)
+		jstack.log.LogError("Create Websocket server failed, %v", err)
 		return
 	}
 
@@ -71,10 +94,10 @@ func RTCClient(target string) *websocket.Conn {
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + rtclocation + "?userid=" + realm
+	url := "http://" + target + jstack.location + "?userid=" + jstack.config.Realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
-		rtclog.LogError("Connect to %s failed", url)
+		jstack.log.LogError("Connect to %s failed", url)
 		return nil
 	}
 
