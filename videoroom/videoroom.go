@@ -19,7 +19,9 @@ type Config struct {
 type session struct {
     jsipID        string
     janusConn    *janus.Janus
-    id            int
+    sessId        int
+    handleId      int
+    videoroom    *Videoroom
 }
 
 type Videoroom struct {
@@ -98,7 +100,8 @@ func (vr *Videoroom) session(DialogueID string) (*session, bool) {
         return nil, false
     }
     vr.sessions[DialogueID] = &session{jsipID: DialogueID,
-                                       janusConn: conn}
+                                       janusConn: conn,
+                                       videoroom: vr}
     fmt.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
 }
@@ -112,26 +115,56 @@ func (s *session) newSession() {
     msg.Janus = "create"
     msg.Transaction = tid
 
-    fmt.Printf("create new Janus session")
+    fmt.Printf("create new Janus session. msg: %+v", msg)
 
     j.Send(msg)
     reqChan, ok := j.MsgChan(tid)
     if !ok {
         fmt.Printf("create: can't find channel for tid %s", tid)
+        return
     }
 
     req := <- reqChan
     fmt.Printf("receive from channel: %+v", req)
     j.NewSess(req.Data.Id)
-    s.id = req.Data.Id
+    s.sessId = req.Data.Id
 
-    fmt.Printf("create janus session %d success", s.id)
+    fmt.Printf("create janus session %d success", s.sessId)
+}
+
+
+func (s *session) attachVideoroom() {
+    var msg janus.ClientMsg
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    msg.Janus = "attach"
+    msg.Plugin = "janus.plugin.videoroom"
+    msg.Transaction = tid
+    msg.SessionId = s.sessId
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        fmt.Printf("attach: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    fmt.Printf("receive from channel: %+v", req)
+    janusSess.Attach(req.Data.Id)
+    s.handleId = req.Data.Id
+
+    fmt.Printf("attach handle %d for session %d", s.handleId, s.sessId)
 }
 
 
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     fmt.Println("recv msg: ", jsip)
 
+    fmt.Printf("The config: %+v", vr.config)
     switch jsip.Type {
     case rtclib.INVITE:
         sess, ok := vr.session(jsip.DialogueID)
@@ -139,8 +172,8 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
             return rtclib.FINISH
         }
         sess.newSession()
-        // vr.newJanusSession()
-        // vr.attach()
+        sess.attachVideoroom()
+        // sess.getRoom()
         // vr.getRoom()
         // vr.joinRoom()
         // vr.offer()
