@@ -5,6 +5,7 @@ import (
     "container/heap"
     "time"
 
+    simplejson "github.com/bitly/go-simplejson"
     "github.com/go-ini/ini"
     "rtclib"
     "janus"
@@ -241,6 +242,50 @@ func (s *session) joinRoom() {
     log.Printf("join room %d for session %d", s.janusRoom, s.sessId)
 }
 
+func (s *session) offer(sdp string) string {
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    type Offer struct {
+        janus.ClientMsg
+        Jsep janus.Jsep `json:"jsep,omitempty"`
+    }
+
+    var msg Offer
+    msg.Janus = "message"
+    msg.Transaction = tid
+    msg.SessionId = s.sessId
+    msg.HandleId = s.handleId
+    msg.Body.Request = "configure"
+    msg.Body.Audio = true
+    msg.Body.Video = true
+    msg.Jsep.Type = "offer"
+    msg.Jsep.Sdp = sdp
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("joinRoom: can't find channel for tid %s", tid)
+        return ""
+    }
+
+    req := <- reqChan
+    for req.Janus != "event" {
+        log.Printf("joinRoom: receive from channel: %+v", req)
+        req = <- reqChan
+    }
+
+    if req.Jsep.Type != "answer" {
+        log.Printf("joinRoom: get answer failed. msg: %+v", req)
+        return ""
+    }
+
+    log.Printf("receive from channel: %+v", req)
+    return req.Jsep.Sdp
+}
+
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
 
@@ -255,7 +300,8 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         sess.attachVideoroom()
         sess.getRoom()
         sess.joinRoom()
-        // vr.joinRoom()
+        offer, _ := jsip.Body.(*simplejson.Json).String()
+        answer := sess.offer(offer)
         // vr.offer()
         resp := &rtclib.JSIP{
             Type:       jsip.Type,
@@ -265,6 +311,7 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
             CSeq:       jsip.CSeq,
             DialogueID: jsip.DialogueID,
             RawMsg:     make(map[string]interface{}),
+            Body:       answer,
         }
 
         rtclib.SendJsonSIPMsg(nil, resp)
