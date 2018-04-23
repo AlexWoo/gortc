@@ -1,7 +1,7 @@
 package main
 
 import (
-    "fmt"
+    "log"
     "container/heap"
     "time"
 
@@ -37,7 +37,7 @@ func GetInstance(task *rtclib.Task) rtclib.SLP {
                         sessions: make(map[string](*session)),
                         jh: &janusHeap{}}
     if !vr.loadConfig() {
-        fmt.Println("Videoroom load config failed")
+        log.Println("Videoroom load config failed")
     }
 
     heap.Init(vr.jh)
@@ -52,7 +52,7 @@ func (vr *Videoroom) loadConfig() bool {
 
     f, err := ini.Load(confPath)
     if err != nil {
-        fmt.Printf("Load config file %s error: %v", confPath, err)
+        log.Printf("Load config file %s error: %v", confPath, err)
         return false
     }
 
@@ -62,29 +62,29 @@ func (vr *Videoroom) loadConfig() bool {
 func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     if vr.jh.Len() > 0 && (*vr.jh)[0].numSess < vr.config.MaxConcurrent {
         (*vr.jh)[0].numSess += 1
-        fmt.Printf("use a cached janus instance with numSess %d",
+        log.Printf("use a cached janus instance with numSess %d",
                    (*vr.jh)[0].numSess)
         return (*vr.jh)[0].janusConn
     }
 
     j := janus.NewJanus(vr.config.JanusAddr)
-    fmt.Printf("connectd to server %s", vr.config.JanusAddr)
+    log.Printf("connectd to server %s", vr.config.JanusAddr)
     go j.WaitMsg()
 
     wait := 0
     for j.ConnectStatus() == false {
         if wait >= 5 {
-            fmt.Printf("wait %d s to connect, quit", wait)
+            log.Printf("wait %d s to connect, quit", wait)
             return nil
         }
         timer := time.NewTimer(time.Second * 1)
         <- timer.C
         wait += 1
-        fmt.Printf("wait %d s to connect", wait)
+        log.Printf("wait %d s to connect", wait)
     }
 
     heap.Push(vr.jh, &janusItem{janusConn: j, numSess: 1})
-    fmt.Printf("created a new janus instance")
+    log.Printf("created a new janus instance")
 
     return j
 }
@@ -102,7 +102,7 @@ func (vr *Videoroom) session(DialogueID string) (*session, bool) {
     vr.sessions[DialogueID] = &session{jsipID: DialogueID,
                                        janusConn: conn,
                                        videoroom: vr}
-    fmt.Printf("create videoroom for DialogueID %s success", DialogueID)
+    log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
 }
 
@@ -115,21 +115,21 @@ func (s *session) newSession() {
     msg.Janus = "create"
     msg.Transaction = tid
 
-    fmt.Printf("create new Janus session. msg: %+v", msg)
+    log.Printf("create new Janus session. msg: %+v", msg)
 
     j.Send(msg)
     reqChan, ok := j.MsgChan(tid)
     if !ok {
-        fmt.Printf("create: can't find channel for tid %s", tid)
+        log.Printf("create: can't find channel for tid %s", tid)
         return
     }
 
     req := <- reqChan
-    fmt.Printf("receive from channel: %+v", req)
+    log.Printf("receive from channel: %+v", req)
     j.NewSess(req.Data.Id)
     s.sessId = req.Data.Id
 
-    fmt.Printf("create janus session %d success", s.sessId)
+    log.Printf("create janus session %d success", s.sessId)
 }
 
 
@@ -148,23 +148,23 @@ func (s *session) attachVideoroom() {
     j.Send(msg)
     reqChan, ok := janusSess.MsgChan(tid)
     if !ok {
-        fmt.Printf("attach: can't find channel for tid %s", tid)
+        log.Printf("attach: can't find channel for tid %s", tid)
         return
     }
 
     req := <- reqChan
-    fmt.Printf("receive from channel: %+v", req)
+    log.Printf("receive from channel: %+v", req)
     janusSess.Attach(req.Data.Id)
     s.handleId = req.Data.Id
 
-    fmt.Printf("attach handle %d for session %d", s.handleId, s.sessId)
+    log.Printf("attach handle %d for session %d", s.handleId, s.sessId)
 }
 
 
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
-    fmt.Println("recv msg: ", jsip)
+    log.Println("recv msg: ", jsip)
 
-    fmt.Printf("The config: %+v", vr.config)
+    log.Printf("The config: %+v", vr.config)
     switch jsip.Type {
     case rtclib.INVITE:
         sess, ok := vr.session(jsip.DialogueID)
