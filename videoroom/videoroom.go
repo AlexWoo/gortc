@@ -18,23 +18,26 @@ type Config struct {
 
 type session struct {
     jsipID        string
+    videoroom    *Videoroom
     janusConn    *janus.Janus
     sessId        int
     handleId      int
-    videoroom    *Videoroom
+    jsipRoom      string
+    janusRoom     int64
 }
 
 type Videoroom struct {
     task       *rtclib.Task
     config     *Config
     sessions    map[string](*session)
-    rooms       map[string]int
+    rooms       map[string]int64
     jh         *janusHeap
 }
 
 func GetInstance(task *rtclib.Task) rtclib.SLP {
     var vr = &Videoroom{task: task,
                         sessions: make(map[string](*session)),
+                        rooms:make(map[string]int64),
                         jh: &janusHeap{}}
     if !vr.loadConfig() {
         log.Println("Videoroom load config failed")
@@ -89,7 +92,8 @@ func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     return j
 }
 
-func (vr *Videoroom) session(DialogueID string) (*session, bool) {
+func (vr *Videoroom) session(jsip *rtclib.JSIP) (*session, bool) {
+    DialogueID := jsip.DialogueID
     sess, exist := vr.sessions[DialogueID]
     if exist {
         return sess, true
@@ -99,9 +103,12 @@ func (vr *Videoroom) session(DialogueID string) (*session, bool) {
     if conn == nil {
         return nil, false
     }
+
+    room := jsip.To
     vr.sessions[DialogueID] = &session{jsipID: DialogueID,
                                        janusConn: conn,
-                                       videoroom: vr}
+                                       videoroom: vr,
+                                       jsipRoom: room}
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
 }
@@ -160,6 +167,39 @@ func (s *session) attachVideoroom() {
     log.Printf("attach handle %d for session %d", s.handleId, s.sessId)
 }
 
+func (s *session) getRoom() {
+    janusRoom, exist := s.videoroom.rooms[s.jsipRoom]
+    if exist {
+        s.janusRoom = janusRoom
+        return
+    }
+
+    var msg janus.ClientMsg
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    msg.Janus = "message"
+    msg.Transaction = tid
+    msg.SessionId = s.sessId
+    msg.HandleId = s.handleId
+    msg.Body.Request = "create"
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("getRoom: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    log.Printf("receive from channel: %+v", req)
+    s.janusRoom = req.Plugindata.Data.Room
+    s.videoroom.rooms[s.jsipRoom] = s.janusRoom
+
+    log.Printf("create room %d for session %d", s.janusRoom, s.sessId)
+}
 
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
@@ -167,13 +207,13 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Printf("The config: %+v", vr.config)
     switch jsip.Type {
     case rtclib.INVITE:
-        sess, ok := vr.session(jsip.DialogueID)
+        sess, ok := vr.session(jsip)
         if !ok {
             return rtclib.FINISH
         }
         sess.newSession()
         sess.attachVideoroom()
-        // sess.getRoom()
+        sess.getRoom()
         // vr.getRoom()
         // vr.joinRoom()
         // vr.offer()
