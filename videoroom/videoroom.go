@@ -24,6 +24,9 @@ type session struct {
     handleId      int
     jsipRoom      string
     janusRoom     int64
+    userName      string
+    myId          int64
+    myPrivateId   int64
 }
 
 type Videoroom struct {
@@ -104,11 +107,11 @@ func (vr *Videoroom) session(jsip *rtclib.JSIP) (*session, bool) {
         return nil, false
     }
 
-    room := jsip.To
     vr.sessions[DialogueID] = &session{jsipID: DialogueID,
                                        janusConn: conn,
                                        videoroom: vr,
-                                       jsipRoom: room}
+                                       jsipRoom: jsip.To,
+                                       userName: jsip.From}
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
 }
@@ -201,6 +204,43 @@ func (s *session) getRoom() {
     log.Printf("create room %d for session %d", s.janusRoom, s.sessId)
 }
 
+func (s *session) joinRoom() {
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    var msg janus.ClientMsg
+    msg.Janus = "message"
+    msg.Transaction = tid
+    msg.SessionId = s.sessId
+    msg.HandleId = s.handleId
+    msg.Body.Request = "join"
+    msg.Body.Room = s.janusRoom
+    msg.Body.Ptype = "publisher"
+    msg.Body.Display = s.userName
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("joinRoom: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    for req.Janus != "event" {
+        log.Printf("joinRoom: receive from channel: %+v", req)
+        req = <- reqChan
+    }
+    log.Printf("receive from channel: %+v", req)
+    s.myId = req.Plugindata.Data.Id
+    s.myPrivateId = req.Plugindata.Data.PrivateId
+    // TODO: new remote feeder
+    // req.Plugindata.Data.Publisher
+
+    log.Printf("join room %d for session %d", s.janusRoom, s.sessId)
+}
+
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
 
@@ -214,7 +254,7 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         sess.newSession()
         sess.attachVideoroom()
         sess.getRoom()
-        // vr.getRoom()
+        sess.joinRoom()
         // vr.joinRoom()
         // vr.offer()
         resp := &rtclib.JSIP{
