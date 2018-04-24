@@ -8,6 +8,7 @@ import (
     "log"
 
     "janus"
+    simplejson "github.com/bitly/go-simplejson"
 )
 
 type session struct {
@@ -193,3 +194,78 @@ func (s *session) offer(sdp string) string {
     return req.Jsep.Sdp
 }
 
+func (s *session) completeCandidate() {
+    type candidate struct {
+        janus.ClientMsg
+        Candidate struct{
+            Completed    bool `json:"completed"`
+        } `json:"candidate"`
+    }
+
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    var msg candidate
+    msg.Janus = "trickle"
+    msg.Candidate.Completed = true
+    msg.SessionId = s.sessId
+    msg.HandleId = s.handleId
+    msg.Transaction = tid
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("candidate: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    log.Printf("candidate completed: receive from channel: %+v", req)
+}
+
+func (s *session) candidate(candidate interface{}) {
+    completed, err := candidate.(*simplejson.Json).Get("completed").Bool()
+    if err == nil && completed == true {
+        s.completeCandidate()
+        return
+    }
+
+    type candidateStruct struct {
+        janus.ClientMsg
+        Candidate struct{
+            Candidate       string `json:"candidate"`
+            Sdpmid          string `json:"sdpMid"`
+            SdpMLineIndex   int64 `json:"sdpMLineIndex"`
+        } `json:"candidate"`
+    }
+
+    candiStr, _ := candidate.(*simplejson.Json).Get("candidate").String()
+    sdpmid, _ := candidate.(*simplejson.Json).Get("sdpMid").String()
+    sdpMLineIndex, _ := candidate.(*simplejson.Json).Get("sdpMLineIndex").Int64()
+
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    var msg candidateStruct
+    msg.Janus = "trickle"
+    msg.Candidate.Candidate = candiStr
+    msg.Candidate.Sdpmid = sdpmid
+    msg.Candidate.SdpMLineIndex = sdpMLineIndex
+    msg.SessionId = s.sessId
+    msg.HandleId = s.handleId
+    msg.Transaction = tid
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("candidate: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    log.Printf("candidate: receive from channel: %+v", req)
+}
