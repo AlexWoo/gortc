@@ -149,7 +149,7 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         sess.candidate(candidate)
         rtclib.SendJSIPRes(jsip, 200)
     case rtclib.ACK:
-        rtclib.SendJSIPBye(rtclib.Jsessions[jsip.DialogueID])
+        return rtclib.CONTINUE
     }
 
     return rtclib.CONTINUE
