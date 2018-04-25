@@ -653,6 +653,9 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 // Session Layer
 func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
+	if jsip.Type == INFO {
+		return OK
+	}
 	switch session.state {
 	case INVITE_INIT:
 		if jsip.Type == INVITE && jsip.Code == 0 {
