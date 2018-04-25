@@ -97,6 +97,8 @@ func (s *session) getRoom() {
     msg.SessionId = s.sessId
     msg.HandleId = s.handleId
     msg.Body.Request = "create"
+    msg.Body.Audiocodec = "opus"
+    msg.Body.Videocodec = "h264"
 
     j.Send(msg)
     reqChan, ok := janusSess.MsgChan(tid)
