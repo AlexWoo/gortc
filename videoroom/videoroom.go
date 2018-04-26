@@ -94,7 +94,8 @@ func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
                                        janusConn: conn,
                                        videoroom: vr,
                                        jsipRoom: jsip.To,
-                                       userName: jsip.From}
+                                       userName: jsip.From,
+                                       mutex: make(chan struct{}, 1)}
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
 }
@@ -104,50 +105,62 @@ func (vr *Videoroom) cachedSession(DialogueID string) (*session, bool) {
     return sess, exist
 }
 
+func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
+    sess, ok := vr.newSession(jsip)
+    if !ok {
+        log.Printf("invite: create session failed")
+        return
+    }
+    sess.lock()
+    sess.newJanusSession()
+    sess.attachVideoroom()
+    sess.getRoom()
+    sess.joinRoom()
+    offer, _ := jsip.Body.(*simplejson.Json).String()
+    answer := sess.offer(offer)
+    sess.unlock()
+    resp := &rtclib.JSIP{
+        Type:       jsip.Type,
+        Code:       200,
+        From:       jsip.From,
+        To:         jsip.To,
+        CSeq:       jsip.CSeq,
+        DialogueID: jsip.DialogueID,
+        RawMsg:     make(map[string]interface{}),
+        Body:       answer,
+    }
+
+    rtclib.SendJsonSIPMsg(nil, resp)
+}
+
+func (vr *Videoroom) processINFO(jsip *rtclib.JSIP) {
+    sess, ok := vr.cachedSession(jsip.DialogueID)
+    if !ok {
+        log.Printf("not found cached session for id %s", jsip.DialogueID)
+    }
+
+    candidate, exist := jsip.Body.(*simplejson.Json).CheckGet("candidate")
+    if exist == false {
+        /* Now the info only transport candidate */
+        log.Printf("not found candidate")
+        return
+    }
+
+    sess.lock()
+    sess.candidate(candidate)
+    sess.unlock()
+    rtclib.SendJSIPRes(jsip, 200)
+}
+
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
 
     log.Printf("The config: %+v", vr.config)
     switch jsip.Type {
     case rtclib.INVITE:
-        sess, ok := vr.newSession(jsip)
-        if !ok {
-            return rtclib.FINISH
-        }
-        sess.newJanusSession()
-        sess.attachVideoroom()
-        sess.getRoom()
-        sess.joinRoom()
-        offer, _ := jsip.Body.(*simplejson.Json).String()
-        answer := sess.offer(offer)
-        // vr.offer()
-        resp := &rtclib.JSIP{
-            Type:       jsip.Type,
-            Code:       200,
-            From:       jsip.From,
-            To:         jsip.To,
-            CSeq:       jsip.CSeq,
-            DialogueID: jsip.DialogueID,
-            RawMsg:     make(map[string]interface{}),
-            Body:       answer,
-        }
-
-        rtclib.SendJsonSIPMsg(nil, resp)
+        go vr.processINVITE(jsip)
     case rtclib.INFO:
-        sess, ok := vr.cachedSession(jsip.DialogueID)
-        if !ok {
-            log.Printf("not found cached session for id %s", jsip.DialogueID)
-        }
-
-        candidate, exist := jsip.Body.(*simplejson.Json).CheckGet("candidate")
-        if exist == false {
-            /* Now the info only transport candidate */
-            log.Printf("not found candidate")
-            return rtclib.FINISH
-        }
-
-        sess.candidate(candidate)
-        rtclib.SendJSIPRes(jsip, 200)
+        go vr.processINFO(jsip)
     case rtclib.ACK:
         return rtclib.CONTINUE
     }

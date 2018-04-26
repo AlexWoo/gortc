@@ -15,6 +15,7 @@ type session struct {
     jsipID        string
     videoroom    *Videoroom
     janusConn    *janus.Janus
+    mutex         chan struct{}
     sessId        int
     handleId      int
     jsipRoom      string
@@ -24,6 +25,16 @@ type session struct {
     myPrivateId   int64
 }
 
+
+func (s *session) lock() {
+    s.mutex <- struct{}{}
+    log.Printf("lock session %s", s.jsipID)
+}
+
+func (s *session) unlock() {
+    <- s.mutex
+    log.Printf("unlock session %d", s.jsipID)
+}
 
 func (s *session) newJanusSession() {
     var msg janus.ClientMsg
