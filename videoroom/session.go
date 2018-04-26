@@ -25,7 +25,7 @@ type session struct {
 }
 
 
-func (s *session) newSession() {
+func (s *session) newJanusSession() {
     var msg janus.ClientMsg
     j := s.janusConn
 

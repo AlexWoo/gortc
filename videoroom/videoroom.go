@@ -114,7 +114,7 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         if !ok {
             return rtclib.FINISH
         }
-        sess.newSession()
+        sess.newJanusSession()
         sess.attachVideoroom()
         sess.getRoom()
         sess.joinRoom()
