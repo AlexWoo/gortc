@@ -21,7 +21,7 @@ type Videoroom struct {
     task       *rtclib.Task
     config     *Config
     sessions    map[string](*session)
-    rooms       map[string]int64
+    rooms       map[string]uint64
     jh         *janusHeap
     mutex       chan struct{}
 }
@@ -29,7 +29,7 @@ type Videoroom struct {
 func GetInstance(task *rtclib.Task) rtclib.SLP {
     var vr = &Videoroom{task: task,
                         sessions: make(map[string](*session)),
-                        rooms:make(map[string]int64),
+                        rooms:make(map[string]uint64),
                         jh: &janusHeap{},
                         mutex: make(chan struct{}, 1)}
     if !vr.loadConfig() {

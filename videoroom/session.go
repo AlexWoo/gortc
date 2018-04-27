@@ -8,6 +8,7 @@ import (
     "log"
 
     "janus"
+    "github.com/tidwall/gjson"
     simplejson "github.com/bitly/go-simplejson"
 )
 
@@ -16,13 +17,13 @@ type session struct {
     videoroom    *Videoroom
     janusConn    *janus.Janus
     mutex         chan struct{}
-    sessId        int
-    handleId      int
+    sessId        uint64
+    handleId      uint64
     jsipRoom      string
-    janusRoom     int64
+    janusRoom     uint64
     userName      string
-    myId          int64
-    myPrivateId   int64
+    myId          uint64
+    myPrivateId   uint64
 }
 
 
@@ -55,9 +56,9 @@ func (s *session) newJanusSession() {
     }
 
     req := <- reqChan
-    log.Printf("receive from channel: %+v", req)
-    j.NewSess(req.Data.Id)
-    s.sessId = req.Data.Id
+    log.Printf("receive from channel: %s", req)
+    s.sessId = gjson.GetBytes(req, "data.id").Uint()
+    j.NewSess(s.sessId)
 
     log.Printf("create janus session %d success", s.sessId)
 }
@@ -83,9 +84,9 @@ func (s *session) attachVideoroom() {
     }
 
     req := <- reqChan
-    log.Printf("receive from channel: %+v", req)
-    janusSess.Attach(req.Data.Id)
-    s.handleId = req.Data.Id
+    log.Printf("receive from channel: %s", req)
+    s.handleId = gjson.GetBytes(req, "data.id").Uint()
+    janusSess.Attach(s.handleId)
 
     log.Printf("attach handle %d for session %d", s.handleId, s.sessId)
 }
@@ -119,8 +120,8 @@ func (s *session) getRoom() {
     }
 
     req := <- reqChan
-    log.Printf("receive from channel: %+v", req)
-    s.janusRoom = req.Plugindata.Data.Room
+    log.Printf("receive from channel: %s", req)
+    s.janusRoom = gjson.GetBytes(req, "plugindata.data.room").Uint()
     s.videoroom.rooms[s.jsipRoom] = s.janusRoom
 
     log.Printf("create room %d for session %d", s.janusRoom, s.sessId)
@@ -150,13 +151,13 @@ func (s *session) joinRoom() {
     }
 
     req := <- reqChan
-    for req.Janus != "event" {
-        log.Printf("joinRoom: receive from channel: %+v", req)
+    for gjson.GetBytes(req, "janus").String() != "event" {
+        log.Printf("joinRoom: receive from channel: %s", req)
         req = <- reqChan
     }
-    log.Printf("receive from channel: %+v", req)
-    s.myId = req.Plugindata.Data.Id
-    s.myPrivateId = req.Plugindata.Data.PrivateId
+    log.Printf("receive from channel: %s", req)
+    s.myId = gjson.GetBytes(req, "plugindata.data.id").Uint()
+    s.myPrivateId = gjson.GetBytes(req, "plugindata.data.private_id").Uint()
     // TODO: new remote feeder
     // req.Plugindata.Data.Publisher
 
@@ -193,18 +194,18 @@ func (s *session) offer(sdp string) string {
     }
 
     req := <- reqChan
-    for req.Janus != "event" {
-        log.Printf("joinRoom: receive from channel: %+v", req)
+    for gjson.GetBytes(req, "janus").String() != "event" {
+        log.Printf("joinRoom: receive from channel: %s", req)
         req = <- reqChan
     }
 
-    if req.Jsep.Type != "answer" {
-        log.Printf("joinRoom: get answer failed. msg: %+v", req)
+    if gjson.GetBytes(req, "jsep.type").String() != "answer" {
+        log.Printf("joinRoom: get answer failed. msg: %s", req)
         return ""
     }
 
-    log.Printf("receive from channel: %+v", req)
-    return req.Jsep.Sdp
+    log.Printf("receive from channel: %s", req)
+    return gjson.GetBytes(req, "jsep.sdp").String()
 }
 
 func (s *session) completeCandidate() {
@@ -235,7 +236,7 @@ func (s *session) completeCandidate() {
     }
 
     req := <- reqChan
-    log.Printf("candidate completed: receive from channel: %+v", req)
+    log.Printf("candidate completed: receive from channel: %s", req)
 }
 
 func (s *session) candidate(candidate interface{}) {
@@ -280,5 +281,5 @@ func (s *session) candidate(candidate interface{}) {
     }
 
     req := <- reqChan
-    log.Printf("candidate: receive from channel: %+v", req)
+    log.Printf("candidate: receive from channel: %s", req)
 }
