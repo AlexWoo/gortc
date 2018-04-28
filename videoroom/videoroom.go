@@ -108,7 +108,8 @@ func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
                                        videoroom: vr,
                                        jsipRoom: jsip.To,
                                        userName: jsip.From,
-                                       mutex: make(chan struct{}, 1)}
+                                       mutex: make(chan struct{}, 1),
+                                       feeds: make(map[string](*feed)),}
     vr.unlock()
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return vr.sessions[DialogueID], true
@@ -122,6 +123,11 @@ func (vr *Videoroom) cachedSession(DialogueID string) (*session, bool) {
 }
 
 func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
+    if jsip.Code != 0 {
+        vr.processFeed(jsip)
+        return
+    }
+
     sess, ok := vr.newSession(jsip)
     if !ok {
         log.Printf("invite: create session failed")
@@ -162,10 +168,48 @@ func (vr *Videoroom) processINFO(jsip *rtclib.JSIP) {
         return
     }
 
-    sess.lock()
-    sess.candidate(candidate)
-    sess.unlock()
+    feed, ok := sess.cachedFeed(jsip.DialogueID)
+    if !ok {
+        sess.lock()
+        sess.candidate(candidate)
+        sess.unlock()
+    } else {
+        feed.candidate(candidate)
+    }
+
     rtclib.SendJSIPRes(jsip, 200)
+}
+
+func (vr *Videoroom) processFeed(jsip *rtclib.JSIP) {
+    sess, ok := vr.cachedSession(jsip.DialogueID)
+    if !ok {
+        log.Printf("not found cached session for id %s", jsip.DialogueID)
+    }
+
+    feed, ok := sess.cachedFeed(jsip.DialogueID)
+    if !ok {
+        log.Printf("not found cached feed for id %s for sess %s",
+                   jsip.DialogueID, sess.jsipID)
+        return
+    }
+
+    answer, err := jsip.Body.(*simplejson.Json).Get("sdp").String()
+    if err != nil {
+        log.Printf("not found sdp for session %s in the respnse", sess.jsipID)
+        return
+    }
+
+    feed.start(answer)
+
+    resp := &rtclib.JSIP{
+        Type:       rtclib.ACK,
+        RequestURI: sess.jsipRoom,
+        From:       jsip.From,
+        To:         jsip.To,
+        DialogueID: jsip.DialogueID,
+    }
+
+    rtclib.SendJsonSIPMsg(nil, resp)
 }
 
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {

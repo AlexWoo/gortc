@@ -8,6 +8,7 @@ import (
     "log"
 
     "janus"
+    "rtclib"
     "github.com/tidwall/gjson"
     simplejson "github.com/bitly/go-simplejson"
 )
@@ -17,6 +18,7 @@ type session struct {
     videoroom    *Videoroom
     janusConn    *janus.Janus
     mutex         chan struct{}
+    feeds         map[string](*feed)
     sessId        uint64
     handleId      uint64
     jsipRoom      string
@@ -160,8 +162,46 @@ func (s *session) joinRoom() {
     s.myPrivateId = gjson.GetBytes(req, "plugindata.data.private_id").Uint()
     // TODO: new remote feeder
     // req.Plugindata.Data.Publisher
+    publishers := gjson.GetBytes(req, "plugindata.data.publishers").Array()
+    for _, publisher := range publishers {
+        go s.listen(publisher.String())
+    }
 
     log.Printf("join room %d for session %d", s.janusRoom, s.sessId)
+}
+
+func (s *session) listen(publisher string) {
+    id := gjson.Get(publisher, "id").Uint()
+    display := gjson.Get(publisher, "display").String()
+    feed := newFeed(id, display, s)
+
+    dialogueID := s.videoroom.task.NewDialogueID()
+    s.feeds[dialogueID] = feed
+    s.videoroom.sessions[dialogueID] = s
+
+    feed.attachVideoroom()
+    offer := feed.listen()
+
+    type bodyStrct struct {
+        Sdp       string `json:"sdp"`
+    }
+    body := bodyStrct{Sdp:offer}
+
+    request := &rtclib.JSIP{
+        Type:       rtclib.INVITE,
+        RequestURI: s.jsipRoom,
+        From:       feed.display,
+        To:         s.userName,
+        DialogueID: dialogueID,
+        Body:       body,
+    }
+
+    rtclib.SendJsonSIPMsg(nil, request)
+}
+
+func (s *session) cachedFeed(id string) (*feed, bool) {
+    feed, exist := s.feeds[id]
+    return feed, exist
 }
 
 func (s *session) offer(sdp string) string {
