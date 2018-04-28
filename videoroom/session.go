@@ -94,11 +94,12 @@ func (s *session) attachVideoroom() {
 }
 
 func (s *session) getRoom() {
-    janusRoom, exist := s.videoroom.rooms[s.jsipRoom]
+    janusRoom, exist := s.videoroom.getRoom(s.jsipRoom)
     if exist {
         s.janusRoom = janusRoom
         return
     }
+    log.Printf("getRoom: can't find room for id `%s`", s.jsipRoom)
 
     var msg janus.ClientMsg
     j := s.janusConn
@@ -122,11 +123,12 @@ func (s *session) getRoom() {
     }
 
     req := <- reqChan
-    log.Printf("receive from channel: %s", req)
+    log.Printf("getRoom: receive from channel: %s", req)
     s.janusRoom = gjson.GetBytes(req, "plugindata.data.room").Uint()
-    s.videoroom.rooms[s.jsipRoom] = s.janusRoom
+    s.videoroom.setRoom(s.jsipRoom, s.janusRoom)
+    log.Printf("getRoom: add room `%d` for id `%s`", s.janusRoom, s.jsipRoom)
 
-    log.Printf("create room %d for session %d", s.janusRoom, s.sessId)
+    log.Printf("getRoom: create room %d for session %d", s.janusRoom, s.sessId)
 }
 
 func (s *session) joinRoom() {

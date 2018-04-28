@@ -95,6 +95,15 @@ func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     return j
 }
 
+func (vr *Videoroom) setRoom(id string, room uint64) {
+    vr.rooms[id] = room
+}
+
+func (vr *Videoroom) getRoom(id string) (uint64, bool) {
+    room, exist := vr.rooms[id]
+    return room, exist
+}
+
 func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
     vr.lock()
     conn := vr.cachedOrNewJanus()
