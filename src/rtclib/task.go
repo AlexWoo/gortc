@@ -13,6 +13,10 @@ const (
 	FINISH
 )
 
+type SlpCtx struct {
+	Body interface{}
+}
+
 type SLP interface {
 	Process(jsip *JSIP) int
 }
@@ -20,6 +24,7 @@ type SLP interface {
 type Task struct {
 	Name string
 	SLP  SLP
+	Ctx *SlpCtx
 	dlgs []string
 }
 
