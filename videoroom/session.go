@@ -179,7 +179,7 @@ func (s *session) listen(publisher string) {
 
     dialogueID := s.videoroom.task.NewDialogueID()
     s.feeds[dialogueID] = feed
-    s.videoroom.sessions[dialogueID] = s
+    s.videoroom.setSession(dialogueID, s)
 
     feed.attachVideoroom()
     offer := feed.listen()

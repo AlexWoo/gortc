@@ -12,6 +12,12 @@ import (
 )
 
 
+type globalCtx struct {
+    sessions    map[string](*session)
+    rooms       map[string]uint64
+    jh         *janusHeap
+}
+
 type Config struct {
     JanusAddr       string
     MaxConcurrent   uint64
@@ -20,24 +26,29 @@ type Config struct {
 type Videoroom struct {
     task       *rtclib.Task
     config     *Config
-    sessions    map[string](*session)
-    rooms       map[string]uint64
-    jh         *janusHeap
+    sess       *session
+    ctx        *globalCtx
     mutex       chan struct{}
 }
 
 func GetInstance(task *rtclib.Task) rtclib.SLP {
     var vr = &Videoroom{task: task,
-                        sessions: make(map[string](*session)),
-                        rooms:make(map[string]uint64),
-                        jh: &janusHeap{},
                         mutex: make(chan struct{}, 1)}
     if !vr.loadConfig() {
         log.Println("Videoroom load config failed")
     }
 
-    heap.Init(vr.jh)
+    if task.Ctx.Body == nil {
+        ctx := &globalCtx{sessions: make(map[string](*session)),
+                          rooms:make(map[string]uint64),
+                          jh: &janusHeap{},}
+        heap.Init(ctx.jh)
 
+        task.Ctx.Body = ctx
+        log.Printf("Init videoroom ctx, ctx = %+v", task.Ctx.Body)
+    }
+
+    vr.ctx = task.Ctx.Body.(*globalCtx)
     return vr
 }
 
@@ -66,11 +77,11 @@ func (vr *Videoroom) unlock() {
 }
 
 func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
-    if vr.jh.Len() > 0 && (*vr.jh)[0].numSess < vr.config.MaxConcurrent {
-        (*vr.jh)[0].numSess += 1
+    if vr.ctx.jh.Len() > 0 && (*vr.ctx.jh)[0].numSess < vr.config.MaxConcurrent {
+        (*vr.ctx.jh)[0].numSess += 1
         log.Printf("use a cached janus instance with numSess %d",
-                   (*vr.jh)[0].numSess)
-        return (*vr.jh)[0].janusConn
+                   (*vr.ctx.jh)[0].numSess)
+        return (*vr.ctx.jh)[0].janusConn
     }
 
     j := janus.NewJanus(vr.config.JanusAddr)
@@ -89,45 +100,52 @@ func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
         log.Printf("wait %d s to connect", wait)
     }
 
-    heap.Push(vr.jh, &janusItem{janusConn: j, numSess: 1})
+    heap.Push(vr.ctx.jh, &janusItem{janusConn: j, numSess: 1})
     log.Printf("created a new janus instance")
 
     return j
 }
 
 func (vr *Videoroom) setRoom(id string, room uint64) {
-    vr.rooms[id] = room
+    vr.ctx.rooms[id] = room
 }
 
 func (vr *Videoroom) getRoom(id string) (uint64, bool) {
-    room, exist := vr.rooms[id]
+    room, exist := vr.ctx.rooms[id]
     return room, exist
 }
 
 func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
-    vr.lock()
     conn := vr.cachedOrNewJanus()
     if conn == nil {
         return nil, false
     }
 
     DialogueID := jsip.DialogueID
-    vr.sessions[DialogueID] = &session{jsipID: DialogueID,
-                                       janusConn: conn,
-                                       videoroom: vr,
-                                       jsipRoom: jsip.To,
-                                       userName: jsip.From,
-                                       mutex: make(chan struct{}, 1),
-                                       feeds: make(map[string](*feed)),}
-    vr.unlock()
+    sess := &session{jsipID: DialogueID,
+                     janusConn: conn,
+                     videoroom: vr,
+                     jsipRoom: jsip.To,
+                     userName: jsip.From,
+                     mutex: make(chan struct{}, 1),
+                     feeds: make(map[string](*feed)),}
+    vr.sess = sess
+    vr.ctx.sessions[DialogueID] = sess
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
-    return vr.sessions[DialogueID], true
+    return sess, true
 }
 
-func (vr *Videoroom) cachedSession(DialogueID string) (*session, bool) {
-    vr.lock()
-    sess, exist := vr.sessions[DialogueID]
-    vr.unlock()
+func (vr *Videoroom) setSession(id string, sess *session) {
+    vr.ctx.sessions[id] = sess
+}
+
+func (vr *Videoroom) cachedSession() (*session) {
+    sess := vr.sess
+    return sess
+}
+
+func (ctx *globalCtx) cachedSession(DialogueID string) (*session, bool) {
+    sess, exist := ctx.sessions[DialogueID]
     return sess, exist
 }
 
@@ -137,12 +155,14 @@ func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
         return
     }
 
+    vr.lock()
     sess, ok := vr.newSession(jsip)
     if !ok {
         log.Printf("invite: create session failed")
         return
     }
     sess.lock()
+    vr.unlock()
     sess.newJanusSession()
     sess.attachVideoroom()
     sess.getRoom()
@@ -165,7 +185,9 @@ func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
 }
 
 func (vr *Videoroom) processINFO(jsip *rtclib.JSIP) {
-    sess, ok := vr.cachedSession(jsip.DialogueID)
+    vr.lock()
+    sess, ok := vr.ctx.cachedSession(jsip.DialogueID)
+    vr.unlock()
     if !ok {
         log.Printf("not found cached session for id %s", jsip.DialogueID)
     }
@@ -190,7 +212,7 @@ func (vr *Videoroom) processINFO(jsip *rtclib.JSIP) {
 }
 
 func (vr *Videoroom) processFeed(jsip *rtclib.JSIP) {
-    sess, ok := vr.cachedSession(jsip.DialogueID)
+    sess, ok := vr.ctx.cachedSession(jsip.DialogueID)
     if !ok {
         log.Printf("not found cached session for id %s", jsip.DialogueID)
     }
