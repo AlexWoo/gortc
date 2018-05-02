@@ -123,6 +123,7 @@ func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
 
     DialogueID := jsip.DialogueID
     sess := &session{jsipID: DialogueID,
+                     url: jsip.RequestURI,
                      janusConn: conn,
                      videoroom: vr,
                      jsipRoom: jsip.To,

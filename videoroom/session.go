@@ -15,6 +15,7 @@ import (
 
 type session struct {
     jsipID        string
+    url           string
     videoroom    *Videoroom
     janusConn    *janus.Janus
     mutex         chan struct{}
@@ -191,14 +192,14 @@ func (s *session) listen(publisher string) {
 
     request := &rtclib.JSIP{
         Type:       rtclib.INVITE,
-        RequestURI: s.jsipRoom,
-        From:       feed.display,
-        To:         s.userName,
+        RequestURI: s.url,
+        From:       s.userName,
+        To:         s.jsipRoom,
         DialogueID: dialogueID,
         Body:       body,
     }
 
-    rtclib.SendJsonSIPMsg(nil, request)
+    rtclib.SendJSIPReq(request, dialogueID)
 }
 
 func (s *session) cachedFeed(id string) (*feed, bool) {
