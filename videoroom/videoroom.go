@@ -4,6 +4,8 @@ import (
     "log"
     "container/heap"
     "time"
+    "strconv"
+    "encoding/json"
 
     simplejson "github.com/bitly/go-simplejson"
     "github.com/go-ini/ini"
@@ -239,7 +241,10 @@ func (vr *Videoroom) processFeed(jsip *rtclib.JSIP) {
         From:       jsip.From,
         To:         jsip.To,
         DialogueID: jsip.DialogueID,
+        RawMsg:     make(map[string]interface{}),
     }
+
+    resp.RawMsg["RelatedID"] = json.Number(strconv.FormatUint(jsip.CSeq, 10))
 
     rtclib.SendJsonSIPMsg(nil, resp)
 }
