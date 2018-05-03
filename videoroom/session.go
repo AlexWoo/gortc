@@ -63,9 +63,55 @@ func (s *session) newJanusSession() {
     s.sessId = gjson.GetBytes(req, "data.id").Uint()
     j.NewSess(s.sessId)
 
+    go s.handleDefaultMsg()
+
     log.Printf("create janus session %d success", s.sessId)
 }
 
+func (s *session) handleDefaultMsg() {
+    janusSess, _ := s.janusConn.Session(s.sessId)
+    msgChan := janusSess.DefaultMsgChan()
+
+    for {
+        msg := <- msgChan
+        switch gjson.GetBytes(msg, "janus").String() {
+        case "webrtcup":
+            log.Printf("webrtcup: stream(`%d`:`%d`) is up",
+                       gjson.GetBytes(msg, "session_id").Uint(),
+                       gjson.GetBytes(msg, "sender").Uint())
+        case "hangup":
+            log.Printf("hangup: stream(`%d`:`%d`) is hangup because `%s`",
+                       gjson.GetBytes(msg, "session_id").Uint(),
+                       gjson.GetBytes(msg, "sender").Uint(),
+                       gjson.GetBytes(msg, "reason").String())
+        case "event":
+            pluginData := gjson.GetBytes(msg, "plugindata")
+            if !pluginData.Exists() {
+                log.Printf("event: no plugindata for msg `%s`", msg)
+                break
+            }
+            data := pluginData.Get("data")
+            if !data.Exists() {
+                log.Printf("event: no data for msg `%s`", msg)
+                break
+            }
+            switch data.Get("videoroom").String() {
+            case "event":
+                if data.Get("publishers").Exists() {
+                    publishers := data.Get("publishers").Array()
+                    for _, publisher := range publishers {
+                        go s.listen(publisher.String())
+                    }
+                }
+            }
+        case "timeout":
+            // TODO: Destory session
+            log.Printf("timeout: session `%d` is timeout in janus server",
+                       gjson.GetBytes(msg, "session_id").Uint())
+            return
+        }
+    }
+}
 
 func (s *session) attachVideoroom() {
     var msg janus.ClientMsg
