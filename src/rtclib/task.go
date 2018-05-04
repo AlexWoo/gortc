@@ -5,6 +5,8 @@
 package rtclib
 
 import (
+	"sync"
+
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -24,8 +26,9 @@ type SLP interface {
 type Task struct {
 	Name string
 	SLP  SLP
-	Ctx *SlpCtx
+	Ctx  *SlpCtx
 	dlgs []string
+	lock sync.Mutex
 }
 
 var tasks = make(map[string]*Task)
@@ -34,13 +37,17 @@ func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV1()
 	dlg := realm + u1.String()
 
+	t.lock.Lock()
 	t.dlgs = append(t.dlgs, dlg)
+	t.lock.Unlock()
 	tasks[dlg] = t
 
 	return dlg
 }
 
 func (t *Task) DelTask() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
 	for _, dlg := range t.dlgs {
 		delete(Jsessions, dlg)
 		delete(tasks, dlg)
@@ -59,7 +66,9 @@ func GetTask(dlg string) *Task {
 
 func NewTask(dlg string) *Task {
 	t := &Task{}
+	t.lock.Lock()
 	t.dlgs = append(t.dlgs, dlg)
+	t.lock.Unlock()
 	tasks[dlg] = t
 
 	return t
