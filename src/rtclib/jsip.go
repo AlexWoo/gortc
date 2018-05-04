@@ -214,6 +214,7 @@ var (
 	Jtransactions = make(map[string]*JSIPTrasaction)
 	Jsessions     = make(map[string]*JSIPSession)
 	JsessLock     sync.RWMutex
+	JtransLock    sync.RWMutex
 )
 
 var (
@@ -239,6 +240,24 @@ func JsessDel(dlg string) {
 	JsessLock.Lock()
 	defer JsessLock.Unlock()
 	delete(Jsessions, dlg)
+}
+
+func JtransGet(tid string) *JSIPTrasaction {
+	JtransLock.RLock()
+	defer JtransLock.RUnlock()
+	return Jtransactions[tid]
+}
+
+func JtransSet(tid string, trans *JSIPTrasaction) {
+	JtransLock.Lock()
+	defer JtransLock.Unlock()
+	Jtransactions[tid] = trans
+}
+
+func JtransDel(tid string) {
+	JtransLock.Lock()
+	defer JtransLock.Unlock()
+	delete(Jtransactions, tid)
 }
 
 func InitHandler(h func(jsip *JSIP), log *Log, rlm string, location string) {
@@ -541,7 +560,7 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 // Transaction Layer
 func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	tid := transactionID(jsip, jsip.CSeq)
-	trans := Jtransactions[tid]
+	trans := JtransGet(tid)
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
@@ -556,7 +575,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			cseq:  jsip.CSeq,
 		}
 
-		Jtransactions[tid] = trans
+		JtransSet(tid, trans)
 
 		if sendrecv == RECV {
 			trans.uatype = UAS
@@ -565,7 +584,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		}
 
 		if jsip.Type == ACK {
-			delete(Jtransactions, tid)
+			JtransDel(tid)
 
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
@@ -575,13 +594,13 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			ackTrans := Jtransactions[tid]
+			ackTrans := JtransGet(tid)
 			if ackTrans == nil {
 				rtclog.LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
-			delete(Jtransactions, tid)
+			JtransDel(tid)
 		}
 
 		if jsip.Type == CANCEL {
@@ -593,7 +612,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			cancelTrans := Jtransactions[tid]
+			cancelTrans := JtransGet(tid)
 			if cancelTrans == nil {
 				rtclog.LogInfo("Transaction Cancelled not exist")
 				return IGNORE
@@ -655,7 +674,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	trans.state = TRANS_FINALRESP
 
 	if trans.typ != INVITE {
-		delete(Jtransactions, tid)
+		JtransDel(tid)
 	}
 
 	if trans.typ == CANCEL && sendrecv == RECV {
@@ -889,7 +908,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 		relatedid, _ := jsip.RawMsg["RelatedID"]
 		rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 		tid := transactionID(jsip, rid)
-		cancelTrans := Jtransactions[tid]
+		cancelTrans := JtransGet(tid)
 		// send CANCEL 200 and REQ 487
 		SendJSIPRes(jsip, 200)
 		SendJSIPRes(cancelTrans.req, 487)
