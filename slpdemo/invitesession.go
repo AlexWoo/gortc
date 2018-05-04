@@ -20,7 +20,7 @@ func (slp *Slpdemo) Process(jsip *rtclib.JSIP) int {
 	case rtclib.INVITE:
 		rtclib.SendJSIPRes(jsip, 200)
 	case rtclib.ACK:
-		rtclib.SendJSIPBye(rtclib.Jsessions[jsip.DialogueID])
+		rtclib.SendJSIPBye(rtclib.JsessGet(jsip.DialogueID))
 	}
 
 	return rtclib.CONTINUE

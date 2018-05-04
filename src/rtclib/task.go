@@ -49,7 +49,7 @@ func (t *Task) DelTask() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	for _, dlg := range t.dlgs {
-		delete(Jsessions, dlg)
+		JsessDel(dlg)
 		delete(tasks, dlg)
 	}
 }
