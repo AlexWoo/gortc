@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	simplejson "github.com/bitly/go-simplejson"
 	"github.com/gorilla/websocket"
@@ -212,6 +213,7 @@ type JSIPSession struct {
 var (
 	Jtransactions = make(map[string]*JSIPTrasaction)
 	Jsessions     = make(map[string]*JSIPSession)
+	JsessLock     sync.RWMutex
 )
 
 var (
@@ -220,6 +222,24 @@ var (
 	realm       string
 	rtclocation string
 )
+
+func JsessGet(dlg string) *JSIPSession {
+	JsessLock.RLock()
+	defer JsessLock.RUnlock()
+	return Jsessions[dlg]
+}
+
+func JsessSet(dlg string, session *JSIPSession) {
+	JsessLock.Lock()
+	defer JsessLock.Unlock()
+	Jsessions[dlg] = session
+}
+
+func JsessDel(dlg string) {
+	JsessLock.Lock()
+	defer JsessLock.Unlock()
+	delete(Jsessions, dlg)
+}
 
 func InitHandler(h func(jsip *JSIP), log *Log, rlm string, location string) {
 	jsipHandle = h
@@ -273,7 +293,7 @@ func JsipName(jsip *JSIP) string {
 func SendJSIPReq(req *JSIP, dlg string) {
 	var conn *websocket.Conn
 
-	if Jsessions[dlg] == nil {
+	if JsessGet(dlg) == nil {
 		var target string
 
 		if len(req.Router) > 0 {
@@ -294,7 +314,7 @@ func SendJSIPReq(req *JSIP, dlg string) {
 			return
 		}
 	} else {
-		conn = Jsessions[dlg].conn
+		conn = JsessGet(dlg).conn
 	}
 
 	req.DialogueID = dlg
@@ -382,7 +402,7 @@ func jsipPrepared(jsip *JSIP) (*JSIP, error) {
 		jsip.RawMsg = make(map[string]interface{})
 	}
 
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session == nil {
 		if jsip.Code != 0 {
 			return nil, errors.New("Cannot send Response for a new session")
@@ -508,7 +528,7 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 
 	jsip.Body = json.Get("Body")
 
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session != nil {
 		if jsip.Code == 0 && jsip.CSeq > session.cseq {
 			session.cseq = jsip.CSeq
@@ -826,7 +846,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 }
 
 func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session == nil {
 		if jsip.Code != 0 {
 			rtclog.LogError("recv response but session is nil")
@@ -840,7 +860,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 			cseq: jsip.CSeq,
 		}
 
-		Jsessions[jsip.DialogueID] = session
+		JsessSet(jsip.DialogueID, session)
 
 		if sendrecv == RECV {
 			session.uatype = UAS
@@ -883,11 +903,11 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 
 	if session.typ == INVITE {
 		if session.state == INVITE_END {
-			delete(Jsessions, session.req.DialogueID)
+			JsessDel(session.req.DialogueID)
 		}
 	} else {
 		if session.state == DEFAULT_RESP {
-			delete(Jsessions, session.req.DialogueID)
+			JsessDel(session.req.DialogueID)
 		}
 	}
 
