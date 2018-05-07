@@ -6,6 +6,7 @@ import (
     "time"
     "strconv"
     "encoding/json"
+    "sync"
 
     simplejson "github.com/bitly/go-simplejson"
     "github.com/go-ini/ini"
@@ -18,6 +19,7 @@ type globalCtx struct {
     sessions    map[string](*session)
     rooms       map[string]uint64
     jh         *janusHeap
+    sessLock    sync.RWMutex
 }
 
 type Config struct {
@@ -133,13 +135,13 @@ func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
                      mutex: make(chan struct{}, 1),
                      feeds: make(map[string](*feed)),}
     vr.sess = sess
-    vr.ctx.sessions[DialogueID] = sess
+    vr.setSession(DialogueID, sess)
     log.Printf("create videoroom for DialogueID %s success", DialogueID)
     return sess, true
 }
 
 func (vr *Videoroom) setSession(id string, sess *session) {
-    vr.ctx.sessions[id] = sess
+    vr.ctx.setSession(id, sess)
 }
 
 func (vr *Videoroom) cachedSession() (*session) {
@@ -148,8 +150,16 @@ func (vr *Videoroom) cachedSession() (*session) {
 }
 
 func (ctx *globalCtx) cachedSession(DialogueID string) (*session, bool) {
+    ctx.sessLock.RLock()
     sess, exist := ctx.sessions[DialogueID]
+    ctx.sessLock.RUnlock()
     return sess, exist
+}
+
+func (ctx *globalCtx) setSession(id string, sess *session) {
+    ctx.sessLock.Lock()
+    ctx.sessions[id] = sess
+    ctx.sessLock.Unlock()
 }
 
 func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
