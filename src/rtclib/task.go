@@ -34,7 +34,7 @@ type Task struct {
 var tasks = make(map[string]*Task)
 
 func (t *Task) NewDialogueID() string {
-	u1, _ := uuid.NewV1()
+	u1, _ := uuid.NewV4()
 	dlg := realm + u1.String()
 
 	t.lock.Lock()
