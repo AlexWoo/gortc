@@ -102,6 +102,23 @@ func (s *session) handleDefaultMsg() {
                     for _, publisher := range publishers {
                         go s.listen(publisher.String())
                     }
+                } else if data.Get("unpublished").Exists() {
+                    unpublished := data.Get("unpublished").Uint()
+                    for id, feed := range s.feeds {
+                        if feed.id == unpublished {
+                            s.detach(feed.handleId)
+
+                            request := &rtclib.JSIP{
+                                Type:       rtclib.BYE,
+                                RequestURI: s.url,
+                                From:       s.userName,
+                                To:         s.jsipRoom,
+                                DialogueID: id,
+                            }
+                            rtclib.SendJsonSIPMsg(nil, request)
+                            break
+                        }
+                    }
                 }
             }
         case "timeout":
@@ -176,6 +193,73 @@ func (s *session) getRoom() {
     log.Printf("getRoom: add room `%d` for id `%s`", s.janusRoom, s.jsipRoom)
 
     log.Printf("getRoom: create room %d for session %d", s.janusRoom, s.sessId)
+}
+
+func (s *session) detach(hid uint64) {
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    msg := make(map[string]interface{})
+    msg["janus"] = "detach"
+    msg["transaction"] = tid
+    msg["session_id"] = s.sessId
+    msg["handle_id"] = hid
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("detach: can't find channel for tid %s", tid)
+        return
+    }
+
+    req := <- reqChan
+    if gjson.GetBytes(req, "janus").String() != "success" {
+        log.Printf("detach: failed, fail message: `%s`", req)
+        return
+    }
+    log.Printf("detach: detach handle `%d` from `%s` success", hid, s.jsipID)
+}
+
+func (s *session) unpublish() {
+    j := s.janusConn
+
+    janusSess, _ := j.Session(s.sessId)
+    tid := janusSess.NewTransaction()
+
+    msg := make(map[string]interface{})
+    body := make(map[string]interface{})
+    body["request"] = "unpublish"
+    msg["janus"] = "message"
+    msg["body"] = body
+    msg["transaction"] = tid
+    msg["session_id"] = s.sessId
+    msg["handle_id"] = s.handleId
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("unpublish: can't find channel for tid %s", tid)
+        return
+    }
+
+loop:
+    for {
+        req := <- reqChan
+        switch gjson.GetBytes(req, "janus").String() {
+        case "ack":
+            log.Printf("unpublish: receive ack")
+        case "error":
+            log.Printf("unpublish: recevie error msg `%s`", req)
+            return
+        case "event":
+            log.Printf("unpublish: receive success msg `%s`", req)
+            break loop
+        }
+    }
+
+    log.Printf("unpublish: success unpublish (`%d`:`%d`)", s.sessId, s.handleId)
 }
 
 func (s *session) joinRoom() {

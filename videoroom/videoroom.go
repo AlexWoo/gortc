@@ -162,6 +162,12 @@ func (ctx *globalCtx) setSession(id string, sess *session) {
     ctx.sessLock.Unlock()
 }
 
+func (ctx *globalCtx) delSession(id string) {
+    ctx.sessLock.Lock()
+    defer ctx.sessLock.Unlock()
+    delete(ctx.sessions, id)
+}
+
 func (vr *Videoroom) processINVITE(jsip *rtclib.JSIP) {
     if jsip.Code != 0 {
         vr.processFeed(jsip)
@@ -259,6 +265,18 @@ func (vr *Videoroom) processFeed(jsip *rtclib.JSIP) {
     rtclib.SendJsonSIPMsg(nil, resp)
 }
 
+func (vr *Videoroom) processBYE(jsip *rtclib.JSIP) {
+    sess, ok := vr.ctx.cachedSession(jsip.DialogueID)
+    if !ok {
+        log.Printf("BYE: not found cached session for id %s", jsip.DialogueID)
+    }
+
+    if sess.jsipID == jsip.DialogueID {
+        sess.unpublish()
+    }
+    vr.ctx.delSession(jsip.DialogueID)
+}
+
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
 
@@ -270,6 +288,8 @@ func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
         go vr.processINFO(jsip)
     case rtclib.ACK:
         return rtclib.CONTINUE
+    case rtclib.BYE:
+        go vr.processBYE(jsip)
     }
 
     return rtclib.CONTINUE
