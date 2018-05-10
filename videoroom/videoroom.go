@@ -273,6 +273,14 @@ func (vr *Videoroom) processBYE(jsip *rtclib.JSIP) {
 
     if sess.jsipID == jsip.DialogueID {
         sess.unpublish()
+    } else {
+        feed, ok := sess.cachedFeed(jsip.DialogueID)
+        if !ok {
+            log.Printf("BYE: not found cached feed for id %s for sess %s",
+                       jsip.DialogueID, sess.jsipID)
+            return
+        }
+        sess.detach(feed.handleId)
     }
     vr.ctx.delSession(jsip.DialogueID)
 }
