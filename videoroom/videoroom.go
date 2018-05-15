@@ -36,11 +36,14 @@ type Videoroom struct {
     config     *Config
     sess       *session
     ctx        *globalCtx
+    handleFlag  bool
+    msgChan     chan *rtclib.JSIP
     mutex       chan struct{}
 }
 
 func GetInstance(task *rtclib.Task) rtclib.SLP {
     var vr = &Videoroom{task: task,
+                        msgChan: make(chan *rtclib.JSIP, 5),
                         mutex: make(chan struct{}, 1)}
     if !vr.loadConfig() {
         log.Println("Videoroom load config failed")
@@ -354,19 +357,39 @@ func (vr *Videoroom) processBYE(jsip *rtclib.JSIP) {
     vr.ctx.delSession(jsip.DialogueID)
 }
 
+func (vr *Videoroom) handleMsg() {
+    defer func() {
+        vr.handleFlag = false
+    }()
+
+    for {
+        msg := <- vr.msgChan
+
+        switch msg.Type {
+        case rtclib.INVITE:
+            vr.processINVITE(msg)
+        case rtclib.INFO:
+            vr.processINFO(msg)
+        case rtclib.BYE:
+            vr.processBYE(msg)
+        }
+    }
+}
+
 func (vr *Videoroom) Process(jsip *rtclib.JSIP) int {
     log.Println("recv msg: ", jsip)
-
     log.Printf("The config: %+v", vr.config)
+
+    if vr.handleFlag == false {
+        vr.handleFlag = true
+        go vr.handleMsg()
+    }
+
+    vr.msgChan <- jsip
+
     switch jsip.Type {
-    case rtclib.INVITE:
-        go vr.processINVITE(jsip)
-    case rtclib.INFO:
-        go vr.processINFO(jsip)
-    case rtclib.ACK:
-        return rtclib.CONTINUE
     case rtclib.BYE:
-        go vr.processBYE(jsip)
+        return rtclib.FINISH
     }
 
     return rtclib.CONTINUE
