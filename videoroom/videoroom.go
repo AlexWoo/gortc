@@ -280,6 +280,7 @@ func (vr *Videoroom) processINFO(jsip *rtclib.JSIP) {
     vr.unlock()
     if !ok {
         log.Printf("not found cached session for id %s", jsip.DialogueID)
+        return
     }
 
     candidate, exist := jsip.Body.(*simplejson.Json).CheckGet("candidate")
@@ -305,6 +306,7 @@ func (vr *Videoroom) processFeed(jsip *rtclib.JSIP) {
     sess, ok := vr.ctx.cachedSession(jsip.DialogueID)
     if !ok {
         log.Printf("not found cached session for id %s", jsip.DialogueID)
+        return
     }
 
     feed, ok := sess.cachedFeed(jsip.DialogueID)
@@ -340,6 +342,7 @@ func (vr *Videoroom) processBYE(jsip *rtclib.JSIP) {
     sess, ok := vr.ctx.cachedSession(jsip.DialogueID)
     if !ok {
         log.Printf("BYE: not found cached session for id %s", jsip.DialogueID)
+        return
     }
 
     if sess.jsipID == jsip.DialogueID {
