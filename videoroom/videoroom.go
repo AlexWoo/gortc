@@ -10,6 +10,7 @@ import (
 
     simplejson "github.com/bitly/go-simplejson"
     "github.com/go-ini/ini"
+    "github.com/go-redis/redis"
     "rtclib"
     "janus"
 )
@@ -17,14 +18,17 @@ import (
 
 type globalCtx struct {
     sessions    map[string](*session)
-    rooms       map[string]uint64
     jh         *janusHeap
     sessLock    sync.RWMutex
+    rClient    *redis.Client
 }
 
 type Config struct {
     JanusAddr       string
     MaxConcurrent   uint64
+    RedisAddr       string
+    RedisPassword   string
+    RedisDB         uint64
 }
 
 type Videoroom struct {
@@ -44,9 +48,20 @@ func GetInstance(task *rtclib.Task) rtclib.SLP {
 
     if task.Ctx.Body == nil {
         ctx := &globalCtx{sessions: make(map[string](*session)),
-                          rooms:make(map[string]uint64),
                           jh: &janusHeap{},}
         heap.Init(ctx.jh)
+
+        ctx.rClient = redis.NewClient(
+            &redis.Options{
+                Addr:     vr.config.RedisAddr,
+                Password: vr.config.RedisPassword,
+                DB:       int(vr.config.RedisDB),
+            })
+        pong, err := ctx.rClient.Ping().Result()
+        if err != nil {
+            log.Println("Init videoroom: ping redis err: ", err)
+        }
+        log.Println("Init videoroom: ping redis, response: ", pong)
 
         task.Ctx.Body = ctx
         log.Printf("Init videoroom ctx, ctx = %+v", task.Ctx.Body)
@@ -110,13 +125,66 @@ func (vr *Videoroom) cachedOrNewJanus() *janus.Janus {
     return j
 }
 
+func (vr *Videoroom) incrMember(room string) {
+    err := vr.ctx.rClient.HIncrBy("member", room, 1).Err()
+    if err != nil {
+        log.Printf("incrMember: redis err: %s", err.Error())
+    }
+}
+
+func (vr *Videoroom) decrMember(room string) {
+    num, err := vr.ctx.rClient.HIncrBy("member", room, -1).Result()
+    if err != nil {
+        log.Printf("decrMember: redis err: %s", err.Error())
+        return
+    }
+
+    if num <= 0 {
+        log.Printf("decrMember: room %s don't have any member, delete it", room)
+        vr.delMember(room)
+        vr.delRoom(room)
+    }
+}
+
+func (vr *Videoroom) delMember(room string) {
+    num, err := vr.ctx.rClient.HDel("member", room).Result()
+    if err != nil {
+        log.Printf("delMember: redis err: %s", err.Error())
+    }
+
+    log.Printf("delMember: delete %d for room %s", num, room)
+}
+
 func (vr *Videoroom) setRoom(id string, room uint64) {
-    vr.ctx.rooms[id] = room
+    err := vr.ctx.rClient.HSet("room", id, room).Err()
+    if err != nil {
+        log.Printf("setRoom: redis err: %s", err.Error())
+        return
+    }
+
+    vr.incrMember(id)
 }
 
 func (vr *Videoroom) getRoom(id string) (uint64, bool) {
-    room, exist := vr.ctx.rooms[id]
-    return room, exist
+    room, err := vr.ctx.rClient.HGet("room", id).Uint64()
+    if err == redis.Nil {
+        log.Printf("getRoom: room %s isn't existed", id)
+    } else if err != nil {
+        log.Printf("getRoom: redis err: %s", err.Error())
+    } else {
+        return room, true
+    }
+
+    return room, false
+}
+
+func (vr *Videoroom) delRoom(id string) {
+    num, err := vr.ctx.rClient.HDel("room", id).Result()
+    if err != nil {
+        log.Printf("delRoom: redis err: %s", err.Error())
+    }
+
+    log.Printf("delRoom: delete %d for room %s", num, id)
 }
 
 func (vr *Videoroom) newSession(jsip *rtclib.JSIP) (*session, bool) {
@@ -273,6 +341,7 @@ func (vr *Videoroom) processBYE(jsip *rtclib.JSIP) {
 
     if sess.jsipID == jsip.DialogueID {
         sess.unpublish()
+        vr.decrMember(sess.jsipRoom)
     } else {
         feed, ok := sess.cachedFeed(jsip.DialogueID)
         if !ok {

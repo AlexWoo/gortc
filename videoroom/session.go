@@ -160,6 +160,7 @@ func (s *session) attachVideoroom() {
 func (s *session) getRoom() {
     janusRoom, exist := s.videoroom.getRoom(s.jsipRoom)
     if exist {
+        s.videoroom.incrMember(s.jsipRoom)
         s.janusRoom = janusRoom
         return
     }
