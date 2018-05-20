@@ -6,6 +6,7 @@ package main
 
 import (
     "log"
+    "time"
 
     "janus"
     "rtclib"
@@ -456,4 +457,35 @@ func (s *session) candidate(candidate interface{}) {
 
     req := <- reqChan
     log.Printf("candidate: receive from channel: %s", req)
+}
+
+func newJanus(addr string) *janus.Janus {
+    j := janus.NewJanus(addr)
+    go j.WaitMsg()
+
+    wait := 0
+    for j.ConnectStatus() == false {
+        if wait >= 5 {
+            log.Printf("wait %d s to connect, quit", wait)
+            return nil
+        }
+        timer := time.NewTimer(time.Second * 1)
+        <- timer.C
+        wait += 1
+        log.Printf("wait %d s to connect", wait)
+    }
+
+    return j
+}
+
+func (s *session) route(remoteServer string, remoteRoom uint64) {
+    router := newRouter(s.janusRoom, remoteRoom)
+    router.remoteConn = newJanus(remoteServer)
+    router.localConn = newJanus(s.videoroom.config.JanusAddr)
+
+    router.newLocalSession()
+    router.newRemoteSession()
+
+    router.startLocal()
+    router.startRemote()
 }

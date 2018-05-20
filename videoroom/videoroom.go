@@ -5,10 +5,14 @@ import (
     "container/heap"
     "time"
     "strconv"
+    "net/http"
     "encoding/json"
     "sync"
+    "bytes"
+    "io/ioutil"
 
     simplejson "github.com/bitly/go-simplejson"
+    "github.com/tidwall/gjson"
     "github.com/go-ini/ini"
     "github.com/go-redis/redis"
     "rtclib"
@@ -29,6 +33,7 @@ type Config struct {
     RedisAddr       string
     RedisPassword   string
     RedisDB         uint64
+    ApiAddr         string
 }
 
 type Videoroom struct {
@@ -39,6 +44,7 @@ type Videoroom struct {
     handleFlag  bool
     msgChan     chan *rtclib.JSIP
     mutex       chan struct{}
+    register    bool
 }
 
 func GetInstance(task *rtclib.Task) rtclib.SLP {
@@ -146,6 +152,9 @@ func (vr *Videoroom) decrMember(room string) {
         log.Printf("decrMember: room %s don't have any member, delete it", room)
         vr.delMember(room)
         vr.delRoom(room)
+        if vr.register {
+            vr.deregisterRoom(vr.sess.jsipRoom)
+        }
     }
 }
 
@@ -158,6 +167,67 @@ func (vr *Videoroom) delMember(room string) {
     log.Printf("delMember: delete %d for room %s", num, room)
 }
 
+func (vr *Videoroom) registerRoom(id string, room uint64) {
+    msg := make(map[string]interface{})
+    msg["janus"] = vr.config.JanusAddr
+    msg["room"] = room
+
+    b, err := json.Marshal(msg)
+    if err != nil {
+        log.Println("registerRoom: json err: ", err)
+        return
+    }
+
+    addr := vr.config.ApiAddr + "/register/" + id
+    contentType := "application/json;charset=utf-8"
+    body := bytes.NewBuffer(b)
+
+    resp, err := http.Post(addr, contentType, body)
+    if err != nil {
+        log.Println("registerRoom: post err: ", err)
+        return
+    }
+
+    defer resp.Body.Close()
+    rBody, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        log.Println("registerRoom: read err: ", err)
+    }
+
+    if resp.StatusCode != http.StatusOK {
+        log.Printf("registerRoom: register failed, response code: `%d`, " +
+                   "body: `%s`", resp.StatusCode, rBody)
+        return
+    }
+
+    if gjson.GetBytes(rBody, "register").Bool() == true {
+        vr.register = true
+        return
+    }
+
+    janusAddr := gjson.GetBytes(rBody, "janus").String()
+    remoteRoom := gjson.GetBytes(rBody, "room").Uint()
+    vr.sess.route(janusAddr, remoteRoom)
+}
+
+func (vr *Videoroom) deregisterRoom(id string) {
+    addr := vr.config.ApiAddr + "/deregister/" + id
+    resp, err := http.Get(addr)
+    if err != nil {
+        log.Println("deregisterRoom: get err: ", err)
+        return
+    }
+
+    if resp.StatusCode != http.StatusOK {
+        log.Printf("deregisterRoom: deregister failed, response code: `%d`",
+                   resp.StatusCode)
+        return
+    }
+
+    vr.register = false
+    return
+}
+
 func (vr *Videoroom) setRoom(id string, room uint64) {
     err := vr.ctx.rClient.HSet("room", id, room).Err()
     if err != nil {
@@ -166,6 +236,8 @@ func (vr *Videoroom) setRoom(id string, room uint64) {
     }
 
     vr.incrMember(id)
+
+    go vr.registerRoom(id, room)
 }
 
 func (vr *Videoroom) getRoom(id string) (uint64, bool) {
