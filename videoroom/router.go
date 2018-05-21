@@ -249,6 +249,29 @@ func configure(j *janus.Janus, sid uint64, hid uint64, sdp string) string {
     }
 }
 
+func completeCandidate(j *janus.Janus, sid uint64, hid uint64) {
+    janusSess, _ := j.Session(sid)
+    tid := janusSess.NewTransaction()
+
+    msg := make(map[string]interface{})
+    candidate := make(map[string]interface{})
+    candidate["completed"] = true
+    msg["janus"] = "trickle"
+    msg["session_id"] = sid
+    msg["handle_id"] = hid
+    msg["transaction"] = tid
+    msg["candidate"] = candidate
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("completeCandidate: can't find channel for tid %s", tid)
+    }
+
+    req := <- reqChan
+    log.Printf("completeCandidate: receive from channel: %s", req)
+}
+
 func start(j *janus.Janus, sid uint64, hid uint64, room uint64, sdp string) {
     janusSess, _ := j.Session(sid)
     tid := janusSess.NewTransaction()
@@ -438,6 +461,9 @@ func (r *router) listenRemote(publisher string) {
 
     start(r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, answer)
     r.registerListener(id, remoteHid, localHid)
+
+    completeCandidate(r.localConn, r.localSid, localHid)
+    completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
 }
 
 func (r *router) listenLocal(publisher string) {
@@ -454,6 +480,9 @@ func (r *router) listenLocal(publisher string) {
 
     start(r.localConn, r.localSid, localHid, r.localRoom, answer)
     r.registerListener(id, localHid, remoteHid)
+
+    completeCandidate(r.localConn, r.localSid, localHid)
+    completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
 }
 
 func (r *router) startRemote() {
