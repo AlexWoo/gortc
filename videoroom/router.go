@@ -24,6 +24,7 @@ type router struct {
     localPrivateId uint64
     remotePrivateId uint64
     listeners   map[uint64]*listener
+    publishers  map[uint64]bool
 }
 
 type listener struct {
@@ -41,6 +42,7 @@ func newListener(id uint64, listen uint64, publish uint64) *listener {
 func newRouter(localRoom uint64, remoteRoom uint64) *router {
     return &router{localRoom: localRoom,
                    listeners: make(map[uint64]*listener),
+                   publishers: make(map[uint64]bool),
                    remoteRoom: remoteRoom,}
 }
 
@@ -427,6 +429,9 @@ func (r *router) handleRemoteMsg() {
                 if data.Get("publishers").Exists() {
                     publishers := data.Get("publishers").Array()
                     for _, publisher := range publishers {
+                        if r.getPublisher(publisher.Get("id").Uint()) {
+                            continue
+                        }
                         switch sender {
                         case r.localHid:
                             go r.listenLocal(publisher.String())
@@ -436,6 +441,9 @@ func (r *router) handleRemoteMsg() {
                     }
                 } else if data.Get("unpublished").Exists() {
                     unpublished := data.Get("unpublished").Uint()
+                    if r.getPublisher(unpublished) {
+                        r.delPublisher(unpublished)
+                    }
                     listener := r.getListener(unpublished)
                     if listener == nil {
                         log.Printf("msg unpublish: id `%d` is not registered",
@@ -501,6 +509,26 @@ func (r *router) delListener(id uint64) {
     delete(r.listeners, id)
 }
 
+func (r *router) registerPublisher(id uint64) {
+    _, exist := r.publishers[id]
+    if exist {
+        log.Printf("registerPublisher: id `%d` already registered", id)
+        return
+    }
+    r.publishers[id] = true
+    log.Printf("registerPublisher: id `%d` register success")
+}
+
+func (r *router) getPublisher(id uint64) bool {
+    _, exist := r.publishers[id]
+    // if publisher exist, it's value only will be true, so just return exist
+    return exist
+}
+
+func (r *router) delPublisher(id uint64) {
+    delete(r.publishers, id)
+}
+
 func (r *router) listenRemote(publisher string) {
     remoteHid := attachVideoroom(r.remoteConn, r.remoteSid)
     id := gjson.Get(publisher, "id").Uint()
@@ -511,7 +539,10 @@ func (r *router) listenRemote(publisher string) {
     remoteCandidate := getFirstCandidateFromSdp(offer)
 
     localHid := attachVideoroom(r.localConn, r.localSid)
-    publish(r.localConn, r.localSid, localHid, r.localRoom, display)
+    publisherMsg := publish(
+        r.localConn, r.localSid, localHid, r.localRoom, display)
+    r.registerPublisher(
+        gjson.GetBytes(publisherMsg, "plugindata.data.id").Uint())
     answer := configure(r.localConn, r.localSid, localHid, offer)
     localCandidate := getFirstCandidateFromSdp(answer)
 
@@ -541,7 +572,10 @@ func (r *router) listenLocal(publisher string) {
     localCandidate := getFirstCandidateFromSdp(offer)
 
     remoteHid := attachVideoroom(r.remoteConn, r.remoteSid)
-    publish(r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, display)
+    publisherMsg := publish(
+        r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, display)
+    r.registerPublisher(
+        gjson.GetBytes(publisherMsg, "plugindata.data.id").Uint())
     answer := configure(r.remoteConn, r.remoteSid, remoteHid, offer)
     remoteCandidate := getFirstCandidateFromSdp(answer)
 
@@ -566,11 +600,17 @@ func (r *router) startRemote() {
 
     publisherMsg := publish(r.remoteConn, r.remoteSid, r.remoteHid,
                             r.remoteRoom, "route")
+    r.registerPublisher(
+        gjson.GetBytes(publisherMsg, "plugindata.data.id").Uint())
     r.remotePrivateId = gjson.GetBytes(
         publisherMsg, "plugindata.data.private_id").Uint()
+
     publishers := gjson.GetBytes(
         publisherMsg, "plugindata.data.publishers").Array()
     for _, publisher := range publishers {
+        if r.getPublisher(publisher.Get("id").Uint()) {
+            continue
+        }
         r.listenRemote(publisher.String())
     }
 }
@@ -580,11 +620,17 @@ func (r *router) startLocal() {
 
     publisherMsg := publish(r.localConn, r.localSid, r.localHid, r.localRoom,
                             "route")
+    r.registerPublisher(
+        gjson.GetBytes(publisherMsg, "plugindata.data.id").Uint())
     r.localPrivateId = gjson.GetBytes(
         publisherMsg, "plugindata.data.private_id").Uint()
+
     publishers := gjson.GetBytes(
         publisherMsg, "plugindata.data.publishers").Array()
     for _, publisher := range publishers {
+        if r.getPublisher(publisher.Get("id").Uint()) {
+            continue
+        }
         r.listenLocal(publisher.String())
     }
 }
