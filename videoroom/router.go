@@ -6,6 +6,7 @@ package main
 
 import (
     "log"
+    "strings"
 
     "janus"
     "github.com/tidwall/gjson"
@@ -249,6 +250,32 @@ func configure(j *janus.Janus, sid uint64, hid uint64, sdp string) string {
     }
 }
 
+func candidate(j *janus.Janus, sid uint64, hid uint64, candiStr string,
+               sdpMid string, sdpMLineIndex uint64) {
+    janusSess, _ := j.Session(sid)
+    tid := janusSess.NewTransaction()
+
+    msg := make(map[string]interface{})
+    candidate := make(map[string]interface{})
+    candidate["candidate"] = candiStr
+    candidate["sdpMid"] = sdpMid
+    candidate["sdpMLineIndex"] = sdpMLineIndex
+    msg["janus"] = "trickle"
+    msg["session_id"] = sid
+    msg["handle_id"] = hid
+    msg["transaction"] = tid
+    msg["candidate"] = candidate
+
+    j.Send(msg)
+    reqChan, ok := janusSess.MsgChan(tid)
+    if !ok {
+        log.Printf("candidate: can't find channel for tid %s", tid)
+    }
+
+    req := <- reqChan
+    log.Printf("candidate: receive from channel: %s", req)
+}
+
 func completeCandidate(j *janus.Janus, sid uint64, hid uint64) {
     janusSess, _ := j.Session(sid)
     tid := janusSess.NewTransaction()
@@ -334,6 +361,33 @@ func detach(j *janus.Janus, sid uint64, hid uint64) {
         return
     }
     log.Printf("detach: detach handle `%d` from `%d` success", hid, sid)
+}
+
+func getFirstCandidateFromSdp(sdp string) string {
+    for _, sdpItem := range strings.Split(sdp, "\r\n") {
+        pair := strings.SplitN(sdpItem, "=", 2)
+        if (len(pair) != 2) {
+            continue
+        }
+
+        valuePair := strings.SplitN(pair[1], ":", 2)
+        if len(valuePair) != 2{
+            continue
+        }
+
+        if valuePair[0] != "candidate" {
+            continue
+        }
+
+        log.Printf(
+            "getFirstCandidateFromSdp: find candidate `%s` from line `%s`",
+            valuePair[1], sdpItem)
+        return valuePair[1]
+    }
+
+    log.Printf("getFirstCandidateFromSdp: not found candidate from sdp `%s`",
+               sdp)
+    return ""
 }
 
 func (r *router) handleRemoteMsg() {
@@ -454,16 +508,27 @@ func (r *router) listenRemote(publisher string) {
 
     offer := listen(r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, id,
                     r.remotePrivateId)
+    remoteCandidate := getFirstCandidateFromSdp(offer)
 
     localHid := attachVideoroom(r.localConn, r.localSid)
     publish(r.localConn, r.localSid, localHid, r.localRoom, display)
     answer := configure(r.localConn, r.localSid, localHid, offer)
+    localCandidate := getFirstCandidateFromSdp(answer)
 
     start(r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, answer)
     r.registerListener(id, remoteHid, localHid)
 
-    completeCandidate(r.localConn, r.localSid, localHid)
-    completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
+    if remoteCandidate != "" {
+        candidate(r.localConn, r.localSid, localHid, remoteCandidate, "router",
+                  0)
+        completeCandidate(r.localConn, r.localSid, localHid)
+    }
+
+    if localCandidate != "" {
+        candidate(r.remoteConn, r.remoteSid, remoteHid, localCandidate,
+                  "router", 0)
+        completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
+    }
 }
 
 func (r *router) listenLocal(publisher string) {
@@ -473,16 +538,27 @@ func (r *router) listenLocal(publisher string) {
 
     offer := listen(r.localConn, r.localSid, localHid, r.localRoom, id,
                     r.localPrivateId)
+    localCandidate := getFirstCandidateFromSdp(offer)
 
     remoteHid := attachVideoroom(r.remoteConn, r.remoteSid)
     publish(r.remoteConn, r.remoteSid, remoteHid, r.remoteRoom, display)
     answer := configure(r.remoteConn, r.remoteSid, remoteHid, offer)
+    remoteCandidate := getFirstCandidateFromSdp(answer)
 
     start(r.localConn, r.localSid, localHid, r.localRoom, answer)
     r.registerListener(id, localHid, remoteHid)
 
-    completeCandidate(r.localConn, r.localSid, localHid)
-    completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
+    if remoteCandidate != "" {
+        candidate(r.localConn, r.localSid, localHid, remoteCandidate, "router",
+                  0)
+        completeCandidate(r.localConn, r.localSid, localHid)
+    }
+
+    if localCandidate != "" {
+        candidate(r.remoteConn, r.remoteSid, remoteHid, localCandidate,
+                  "router", 0)
+        completeCandidate(r.remoteConn, r.remoteSid, remoteHid)
+    }
 }
 
 func (r *router) startRemote() {
