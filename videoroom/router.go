@@ -392,8 +392,8 @@ func getFirstCandidateFromSdp(sdp string) string {
     return ""
 }
 
-func (r *router) handleRemoteMsg() {
-    janusSess, _ := r.remoteConn.Session(r.remoteSid)
+func (r *router) handleDefaultMsg(j *janus.Janus, sid uint64) {
+    janusSess, _ := j.Session(sid)
     msgChan := janusSess.DefaultMsgChan()
 
     for {
@@ -475,15 +475,17 @@ func (r *router) handleRemoteMsg() {
 
 func (r *router) newRemoteSession() {
     r.remoteSid = newJanusSession(r.remoteConn)
+    r.remoteHid = attachVideoroom(r.remoteConn, r.remoteSid)
 
-    // TODO: handleDefaultMsg()
+    go r.handleDefaultMsg(r.remoteConn, r.remoteSid)
     log.Printf("newRemoteSession: new janus session `%d` success", r.remoteSid)
 }
 
 func (r *router) newLocalSession() {
     r.localSid = newJanusSession(r.localConn)
+    r.localHid = attachVideoroom(r.localConn, r.localSid)
 
-    // TODO: handleDefaultMsg()
+    go r.handleDefaultMsg(r.localConn, r.localSid)
     log.Printf("newLocalSession: new janus session `%d` success", r.localSid)
 }
 
@@ -596,8 +598,6 @@ func (r *router) listenLocal(publisher string) {
 }
 
 func (r *router) startRemote() {
-    r.remoteHid = attachVideoroom(r.remoteConn, r.remoteSid)
-
     publisherMsg := publish(r.remoteConn, r.remoteSid, r.remoteHid,
                             r.remoteRoom, "route")
     r.registerPublisher(
@@ -616,8 +616,6 @@ func (r *router) startRemote() {
 }
 
 func (r *router) startLocal() {
-    r.localHid = attachVideoroom(r.localConn, r.localSid)
-
     publisherMsg := publish(r.localConn, r.localSid, r.localHid, r.localRoom,
                             "route")
     r.registerPublisher(
