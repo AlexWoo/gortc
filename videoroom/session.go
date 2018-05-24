@@ -167,19 +167,22 @@ func (s *session) getRoom() {
     }
     log.Printf("getRoom: can't find room for id `%s`", s.jsipRoom)
 
-    var msg janus.ClientMsg
     j := s.janusConn
-
     janusSess, _ := j.Session(s.sessId)
     tid := janusSess.NewTransaction()
 
-    msg.Janus = "message"
-    msg.Transaction = tid
-    msg.SessionId = s.sessId
-    msg.HandleId = s.handleId
-    msg.Body.Request = "create"
-    msg.Body.Audiocodec = "opus"
-    msg.Body.Videocodec = "h264"
+    msg := make(map[string]interface{})
+    body := make(map[string]interface{})
+    body["request"] = "create"
+    body["audiocodec"] = "opus"
+    body["videocodec"] = "h264"
+    // Don't need limit now, so just set to 20
+    body["publishers"] = 20
+    msg["janus"] = "message"
+    msg["session_id"] = s.sessId
+    msg["handle_id"] = s.handleId
+    msg["transaction"] = tid
+    msg["body"] = body
 
     j.Send(msg)
     reqChan, ok := janusSess.MsgChan(tid)
@@ -192,9 +195,10 @@ func (s *session) getRoom() {
     log.Printf("getRoom: receive from channel: %s", req)
     s.janusRoom = gjson.GetBytes(req, "plugindata.data.room").Uint()
     s.videoroom.setRoom(s.jsipRoom, s.janusRoom)
-    log.Printf("getRoom: add room `%d` for id `%s`", s.janusRoom, s.jsipRoom)
+    log.Printf("getRoom: add room `%d` for id `%d`", s.janusRoom, s.sessId)
 
-    log.Printf("getRoom: create room %d for session %d", s.janusRoom, s.sessId)
+    log.Printf("getRoom: create room `%d` for session `%s`", s.janusRoom,
+               s.jsipRoom)
 }
 
 func (s *session) detach(hid uint64) {
