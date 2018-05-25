@@ -1,5 +1,5 @@
-if [ $# -ne 1 ];then
-    echo "Usage: $1 plugin_name"
+if [ $# -ne 2 ];then
+    echo "Usage: $1 plugin_name $2 plugin_path"
     exit 1
 fi
 
@@ -9,7 +9,7 @@ CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
-echo "slpcompile $rtcpath/slp/$1.so $1/$1.go"
-go build -ldflags "-pluginpath=$1" -buildmode=plugin -o $rtcpath/slp/$1.so $1/$1.go
+echo "slpcompile $rtcpath/slp/$1.so $2/$1.go"
+go build -ldflags "-pluginpath=$2" -buildmode=plugin -o $rtcpath/slp/$1.so $2/*.go
 
 export GOPATH="$OLDGOPATH"
