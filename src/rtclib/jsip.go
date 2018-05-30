@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	simplejson "github.com/bitly/go-simplejson"
-	"github.com/gorilla/websocket"
 )
 
 // return value
@@ -200,7 +199,7 @@ type JSIPTrasaction struct {
 }
 
 type JSIPSession struct {
-	conn    *websocket.Conn
+	conn    *JSIPConn
 	typ     int
 	state   int
 	uatype  int
@@ -257,7 +256,7 @@ func JsipName(jsip *JSIP) string {
 }
 
 func SendJSIPReq(req *JSIP, dlg string) {
-	var conn *websocket.Conn
+	var conn *JSIPConn
 
 	if Jsessions[dlg] == nil {
 		var target string
@@ -808,7 +807,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 	return OK
 }
 
-func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
+func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 	session := Jsessions[jsip.DialogueID]
 	if session == nil {
 		if jsip.Code != 0 {
@@ -830,8 +829,6 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 		} else {
 			session.uatype = UAC
 		}
-
-		fmt.Println(session.typ, INVITE)
 
 		switch session.typ {
 		case INVITE:
@@ -861,7 +858,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 	if sendrecv == RECV {
 		jstack.jsipHandle(jsip)
 	} else {
-		session.conn.WriteJSON(jsip.RawMsg)
+		session.conn.sendq <- jsip.RawMsg
 	}
 
 	if session.typ == INVITE {
@@ -877,7 +874,7 @@ func jsipSession(conn *websocket.Conn, jsip *JSIP, sendrecv int) int {
 	return OK
 }
 
-func RecvJSIPMsg(conn *websocket.Conn, data []byte) bool {
+func RecvJsonSIPMsg(conn *JSIPConn, data []byte) bool {
 	// Syntax Layer
 	jsip, err := jsipUnParser(data)
 	if err != nil {
@@ -903,7 +900,7 @@ func RecvJSIPMsg(conn *websocket.Conn, data []byte) bool {
 	return true
 }
 
-func SendJsonSIPMsg(conn *websocket.Conn, jsip *JSIP) {
+func SendJsonSIPMsg(conn *JSIPConn, jsip *JSIP) {
 	// Syntax Layer
 	j, err := jsipPrepared(jsip)
 	if err != nil {

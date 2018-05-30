@@ -1,6 +1,9 @@
 package main
 
-import "rtclib"
+import (
+	"fmt"
+	"rtclib"
+)
 
 type Slpdemo struct {
 	task *rtclib.Task
@@ -11,5 +14,14 @@ func GetInstance(task *rtclib.Task) rtclib.SLP {
 }
 
 func (slp *Slpdemo) Process(jsip *rtclib.JSIP) int {
-	return rtclib.FINISH
+	fmt.Println("recv msg: ", jsip)
+
+	switch jsip.Type {
+	case rtclib.INVITE:
+		rtclib.SendJSIPRes(jsip, 200)
+	case rtclib.ACK:
+		rtclib.SendJSIPBye(rtclib.Jsessions[jsip.DialogueID])
+	}
+
+	return rtclib.CONTINUE
 }

@@ -1,0 +1,27 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "INVITE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Router": "a.test.com;type=slpdemo, b.test.com",
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 1
+    }
+}
+
+]

@@ -6,6 +6,7 @@ package rtclib
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/go-ini/ini"
 	"github.com/gorilla/websocket"
@@ -16,10 +17,17 @@ type JSIPConfig struct {
 	Realm    string
 }
 
+type JSIPConn struct {
+	conn   *websocket.Conn
+	uatype int
+	sendq  chan interface{}
+}
+
 type JSIPStack struct {
 	config     *JSIPConfig
 	jsipHandle func(jsip *JSIP)
 	log        *Log
+	conns      sync.Map //map[string]*JSIPConn
 }
 
 var upgrader = websocket.Upgrader{
@@ -30,55 +38,56 @@ var upgrader = websocket.Upgrader{
 
 var jstack *JSIPStack
 
-var transports = make(map[string]*websocket.Conn)
-
-func (stack *JSIPStack) LoadConfig() bool {
-	stack.config = new(JSIPConfig)
-
-	confPath := RTCPATH + "/conf/gortc.ini"
-
-	f, err := ini.Load(confPath)
-	if err != nil {
-		jstack.log.LogError("Load config file %s error: %v", confPath, err)
-		return false
-	}
-
-	return Config(f, "JSIPStack", stack.config)
-}
-
 func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
 	jstack = &JSIPStack{
 		jsipHandle: h,
 		log:        log,
 	}
 
+	if !jstack.LoadConfig() {
+		return nil
+	}
+
+	if jstack.config.Realm == "" {
+		jstack.log.LogError("JSIPStack Realm not configured")
+		return nil
+	}
+
 	return jstack
 }
 
-func writemsg(conn *websocket.Conn, jsip *JSIP) {
-	// TODO Error when sending msg
-	conn.WriteJSON(jsip.RawMsg)
-}
+func (jconn *JSIPConn) write() {
+	defer jconn.conn.Close()
 
-func readloop(name string, conn *websocket.Conn) {
 	for {
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			jstack.log.LogError("RTC read message error, %v", err)
-			break
-		}
+		select {
+		case msg, ok := <-jconn.sendq:
+			if !ok {
+				jstack.log.LogError("RTC write message error")
+				return
+			}
 
-		if !RecvJSIPMsg(conn, data) {
-			break
+			jconn.conn.WriteJSON(msg)
 		}
 	}
+}
 
-	conn.Close()
+func (jconn *JSIPConn) read() {
+	defer jconn.conn.Close()
 
-	delete(transports, name)
+	for {
+		_, data, err := jconn.conn.ReadMessage()
+		if err != nil {
+			jstack.log.LogError("RTC read message error, %v", err)
+			return
+		}
+
+		RecvJsonSIPMsg(jconn, data)
+	}
 }
 
 func wsCheckOrigin(r *http.Request) bool {
+	//Access Control from here
 	return true
 }
 
@@ -96,33 +105,72 @@ func (stack *JSIPStack) RTCServer(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	transports[userid] = conn
+	jconn := &JSIPConn{
+		conn:   conn,
+		uatype: UAS,
+		sendq:  make(chan interface{}, 1024),
+	}
 
-	readloop(userid, conn)
+	vv, ok := stack.conns.LoadOrStore(userid, jconn)
+	if ok {
+		jconn = vv.(*JSIPConn)
+		if jconn.uatype == UAC {
+			jstack.log.LogError("%s should be UAC, refused connection", userid)
+			return
+		}
+		jconn.conn = conn
+	}
+
+	go jconn.write()
+	jconn.read()
 }
 
-func (stack *JSIPStack) RTCClient(target string) *websocket.Conn {
-	conn := transports[target]
-	if conn != nil {
-		return conn
+func (stack *JSIPStack) RTCClient(target string) *JSIPConn {
+	jconn := &JSIPConn{
+		uatype: UAC,
+		sendq:  make(chan interface{}, 1024),
+	}
+
+	vv, ok := stack.conns.LoadOrStore(target, jconn)
+	if ok {
+		jconn = vv.(*JSIPConn)
+		return jconn
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + jstack.config.Location +
-		"?userid=" + jstack.config.Realm
+	url := "http://" + target + stack.config.Location +
+		"?userid" + stack.config.Realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		jstack.log.LogError("Connect to %s failed", url)
 		return nil
 	}
+	jconn.conn = conn
 
-	transports[target] = conn
+	go jconn.read()
+	go jconn.write()
 
-	go readloop(target, conn)
+	return jconn
+}
 
-	return conn
+func (stack *JSIPStack) LoadConfig() bool {
+	stack.config = new(JSIPConfig)
+
+	confPath := RTCPATH + "/conf/gortc.ini"
+
+	f, err := ini.Load(confPath)
+	if err != nil {
+		jstack.log.LogError("Load config file %s error: %v", confPath, err)
+		return false
+	}
+
+	return Config(f, "JSIPStack", stack.config)
 }
 
 func (stack *JSIPStack) Location() string {
 	return stack.config.Location
+}
+
+func (stack *JSIPStack) Realm() string {
+	return stack.config.Realm
 }

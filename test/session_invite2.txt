@@ -1,0 +1,35 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "ACK",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 2,
+        "RelatedID": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "BYE"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 3
+    }
+}
+
+]
