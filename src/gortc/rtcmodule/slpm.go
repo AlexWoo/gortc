@@ -21,6 +21,7 @@ type slpPlugin struct {
 	using    uint64
 	file     string
 	time     time.Time
+	ctx      *rtclib.SlpCtx
 	instance func(task *rtclib.Task) rtclib.SLP
 }
 
@@ -62,6 +63,7 @@ func slpLoad(name string, slpFile string) bool {
 		}
 	}()
 
+	slp.ctx = new(rtclib.SlpCtx)
 	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
 	slp.time = time.Now()
 	slpm.slps[name] = slp
@@ -169,6 +171,7 @@ func getSLP(t *rtclib.Task) rtclib.SLP {
 	}
 	p.using++
 
+	t.Ctx = p.ctx
 	return p.instance(t)
 }
 

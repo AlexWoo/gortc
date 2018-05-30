@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	simplejson "github.com/bitly/go-simplejson"
 )
@@ -211,7 +212,59 @@ type JSIPSession struct {
 var (
 	Jtransactions = make(map[string]*JSIPTrasaction)
 	Jsessions     = make(map[string]*JSIPSession)
+	JsessLock     sync.RWMutex
+	JtransLock    sync.RWMutex
 )
+
+var (
+	jsipHandle  func(jsip *JSIP)
+	rtclog      *Log
+	realm       string
+	rtclocation string
+)
+
+func JsessGet(dlg string) *JSIPSession {
+	JsessLock.RLock()
+	defer JsessLock.RUnlock()
+	return Jsessions[dlg]
+}
+
+func JsessSet(dlg string, session *JSIPSession) {
+	JsessLock.Lock()
+	defer JsessLock.Unlock()
+	Jsessions[dlg] = session
+}
+
+func JsessDel(dlg string) {
+	JsessLock.Lock()
+	defer JsessLock.Unlock()
+	delete(Jsessions, dlg)
+}
+
+func JtransGet(tid string) *JSIPTrasaction {
+	JtransLock.RLock()
+	defer JtransLock.RUnlock()
+	return Jtransactions[tid]
+}
+
+func JtransSet(tid string, trans *JSIPTrasaction) {
+	JtransLock.Lock()
+	defer JtransLock.Unlock()
+	Jtransactions[tid] = trans
+}
+
+func JtransDel(tid string) {
+	JtransLock.Lock()
+	defer JtransLock.Unlock()
+	delete(Jtransactions, tid)
+}
+
+func InitHandler(h func(jsip *JSIP), log *Log, rlm string, location string) {
+	jsipHandle = h
+	rtclog = log
+	realm = rlm
+	rtclocation = location
+}
 
 func transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
@@ -258,7 +311,7 @@ func JsipName(jsip *JSIP) string {
 func SendJSIPReq(req *JSIP, dlg string) {
 	var conn *JSIPConn
 
-	if Jsessions[dlg] == nil {
+	if JsessGet(dlg) == nil {
 		var target string
 
 		if len(req.Router) > 0 {
@@ -279,7 +332,7 @@ func SendJSIPReq(req *JSIP, dlg string) {
 			return
 		}
 	} else {
-		conn = Jsessions[dlg].conn
+		conn = JsessGet(dlg).conn
 	}
 
 	req.DialogueID = dlg
@@ -367,7 +420,7 @@ func jsipPrepared(jsip *JSIP) (*JSIP, error) {
 		jsip.RawMsg = make(map[string]interface{})
 	}
 
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session == nil {
 		if jsip.Code != 0 {
 			return nil, errors.New("Cannot send Response for a new session")
@@ -493,7 +546,7 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 
 	jsip.Body = json.Get("Body")
 
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session != nil {
 		if jsip.Code == 0 && jsip.CSeq > session.cseq {
 			session.cseq = jsip.CSeq
@@ -506,7 +559,7 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 // Transaction Layer
 func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	tid := transactionID(jsip, jsip.CSeq)
-	trans := Jtransactions[tid]
+	trans := JtransGet(tid)
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
@@ -521,7 +574,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			cseq:  jsip.CSeq,
 		}
 
-		Jtransactions[tid] = trans
+		JtransSet(tid, trans)
 
 		if sendrecv == RECV {
 			trans.uatype = UAS
@@ -530,7 +583,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		}
 
 		if jsip.Type == ACK {
-			delete(Jtransactions, tid)
+			JtransDel(tid)
 
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
@@ -540,13 +593,13 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			ackTrans := Jtransactions[tid]
+			ackTrans := JtransGet(tid)
 			if ackTrans == nil {
 				jstack.log.LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
-			delete(Jtransactions, tid)
+			JtransDel(tid)
 		}
 
 		if jsip.Type == CANCEL {
@@ -558,7 +611,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 			tid = transactionID(jsip, rid)
-			cancelTrans := Jtransactions[tid]
+			cancelTrans := JtransGet(tid)
 			if cancelTrans == nil {
 				jstack.log.LogInfo("Transaction Cancelled not exist")
 				return IGNORE
@@ -620,7 +673,7 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	trans.state = TRANS_FINALRESP
 
 	if trans.typ != INVITE {
-		delete(Jtransactions, tid)
+		JtransDel(tid)
 	}
 
 	if trans.typ == CANCEL && sendrecv == RECV {
@@ -638,6 +691,9 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 // Session Layer
 func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
+	if jsip.Type == INFO {
+		return OK
+	}
 	switch session.state {
 	case INVITE_INIT:
 		if jsip.Type == INVITE && jsip.Code == 0 {
@@ -808,7 +864,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 }
 
 func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
-	session := Jsessions[jsip.DialogueID]
+	session := JsessGet(jsip.DialogueID)
 	if session == nil {
 		if jsip.Code != 0 {
 			jstack.log.LogError("recv response but session is nil")
@@ -822,7 +878,7 @@ func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 			cseq: jsip.CSeq,
 		}
 
-		Jsessions[jsip.DialogueID] = session
+		JsessSet(jsip.DialogueID, session)
 
 		if sendrecv == RECV {
 			session.uatype = UAS
@@ -849,7 +905,7 @@ func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 		relatedid, _ := jsip.RawMsg["RelatedID"]
 		rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
 		tid := transactionID(jsip, rid)
-		cancelTrans := Jtransactions[tid]
+		cancelTrans := JtransGet(tid)
 		// send CANCEL 200 and REQ 487
 		SendJSIPRes(jsip, 200)
 		SendJSIPRes(cancelTrans.req, 487)
@@ -863,11 +919,11 @@ func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 
 	if session.typ == INVITE {
 		if session.state == INVITE_END {
-			delete(Jsessions, session.req.DialogueID)
+			JsessDel(session.req.DialogueID)
 		}
 	} else {
 		if session.state == DEFAULT_RESP {
-			delete(Jsessions, session.req.DialogueID)
+			JsessDel(session.req.DialogueID)
 		}
 	}
 

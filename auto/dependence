@@ -2,3 +2,5 @@ github.com/go-ini/ini
 github.com/gorilla/websocket
 github.com/bitly/go-simplejson
 github.com/satori/go.uuid
+github.com/tidwall/gjson
+github.com/go-redis/redis
