@@ -777,6 +777,17 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 				session.state = INVITE_REINV
 				return OK
 			}
+		case jsip.Type == UPDATE:
+			if jsip.Code == 0 {
+				SendJSIPRes(jsip, 200)
+				return OK
+			}
+
+			if jsip.Code == 200 {
+				if sendrecv == SEND {
+					return OK
+				}
+			}
 		case jsip.Type == BYE:
 			if sendrecv == RECV {
 				SendJSIPRes(jsip, 200)

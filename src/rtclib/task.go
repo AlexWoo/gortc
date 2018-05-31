@@ -5,7 +5,6 @@
 package rtclib
 
 import (
-	"fmt"
 	"sync"
 
 	uuid "github.com/satori/go.uuid"
@@ -66,7 +65,6 @@ func (t *Task) run() {
 	for {
 		select {
 		case msg := <-t.msgs:
-			fmt.Println("!!!!!!!!run")
 			t.SLP.Process(msg)
 		}
 
@@ -81,7 +79,6 @@ func (t *Task) SetFinished() {
 }
 
 func (t *Task) Process(jsip *JSIP) {
-	fmt.Println("!!!!!!!!Process")
 	t.msgs <- jsip
 }
 
