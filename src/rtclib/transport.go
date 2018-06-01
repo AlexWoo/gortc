@@ -6,6 +6,7 @@ package rtclib
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/go-ini/ini"
@@ -125,21 +126,45 @@ func (stack *JSIPStack) RTCServer(w http.ResponseWriter, req *http.Request) {
 	jconn.read()
 }
 
-func (stack *JSIPStack) RTCClient(target string) *JSIPConn {
+func parseUri(uri string) (string, string) {
+	var userWithHost, hostWithPort string
+
+	ss := strings.Split(uri, ";")
+	uri = ss[0]
+
+	ss = strings.Split(uri, "@")
+	if len(ss) == 1 {
+		hostWithPort = ss[0]
+	} else {
+		hostWithPort = ss[1]
+	}
+
+	ss = strings.Split(uri, ":")
+	userWithHost = ss[0]
+
+	return userWithHost, hostWithPort
+}
+
+func (stack *JSIPStack) RTCClient(uri string) *JSIPConn {
+	userWithHost, hostWithPort := parseUri(uri)
+	if userWithHost == "" {
+		return nil
+	}
+
 	jconn := &JSIPConn{
 		uatype: UAC,
 		sendq:  make(chan interface{}, 1024),
 	}
 
-	vv, ok := stack.conns.LoadOrStore(target, jconn)
+	vv, ok := stack.conns.LoadOrStore(userWithHost, jconn)
 	if ok {
 		jconn = vv.(*JSIPConn)
 		return jconn
 	}
 
 	dialer := websocket.DefaultDialer
-	url := "http://" + target + stack.config.Location +
-		"?userid" + stack.config.Realm
+	url := "ws://" + hostWithPort + stack.config.Location +
+		"?userid=" + stack.config.Realm
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		jstack.log.LogError("Connect to %s failed", url)

@@ -312,22 +312,14 @@ func SendJSIPReq(req *JSIP, dlg string) {
 	var conn *JSIPConn
 
 	if JsessGet(dlg) == nil {
-		var target string
-
 		if len(req.Router) > 0 {
 			// Use Router Header 0 as default route if exist
-			_, target, _ = JsipParseUri(req.Router[0])
+			conn = jstack.RTCClient(req.Router[0])
 		} else {
 			// Use Request-URI as default route if Router Header not exist
-			_, target, _ = JsipParseUri(req.RequestURI)
+			conn = jstack.RTCClient(req.RequestURI)
 		}
 
-		if target == "" {
-			jstack.log.LogError("Router or RequestURI is nil when send new request")
-			return
-		}
-
-		conn = jstack.RTCClient(target)
 		if conn == nil {
 			return
 		}
@@ -540,6 +532,9 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 	routers, _ := json.Get("Router").String()
 	if routers != "" {
 		jsip.Router = strings.Split(routers, ",")
+		for i := 0; i < len(jsip.Router); i++ {
+			jsip.Router[i] = strings.TrimSpace(jsip.Router[i])
+		}
 	}
 
 	jsip.RawMsg, err = json.Map()

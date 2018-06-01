@@ -1,0 +1,60 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "INVITE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "Expire": 300,
+        "CSeq": 1,
+        "Router": "a.test.com;type=slpdemo, 127.0.0.1:8081;123123123",
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "ACK",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 2,
+        "RelatedID": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "BYE"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@test.com",
+        "To": "Alex@test.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 3
+    }
+}
+
+]

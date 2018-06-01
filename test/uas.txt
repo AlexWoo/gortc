@@ -1,0 +1,54 @@
+[
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "INVITE",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Bob@test.com",
+        "To": "Bob@test.com",
+        "DialogueID": "1234567",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "ACK",
+        "CSeq": 2,
+        "RelatedID": 1
+    }
+},
+
+{
+    "type": "send",
+    "timeout": "10s",
+    "value": {
+        "Type": "BYE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Bob@test.com",
+        "To": "Bob@test.com",
+        "DialogueID": "1234567",
+        "CSeq": 3
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 3
+    }
+}
+
+]
