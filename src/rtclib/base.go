@@ -9,6 +9,8 @@ const (
 	UAC
 )
 
+type Size_t uint64
+
 // Base Conn type
 type Conn interface {
 	// Connect to server as client

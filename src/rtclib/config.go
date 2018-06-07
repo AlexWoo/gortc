@@ -9,12 +9,10 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-ini/ini"
 )
-
-type Size_t uint64
-type Msec_t uint64
 
 func confValue(key string, s *ini.Section) string {
 	return s.Key(key).Value()
@@ -169,55 +167,31 @@ func confSize(value string, defaultVal Size_t) Size_t {
 	return defaultVal
 }
 
-func strToMsec(value string) (Msec_t, bool) {
+func strToTimeDuration(value string) (time.Duration, bool) {
 	if value == "" {
-		return 0, false
+		return time.Duration(0), false
 	}
 
-	var data []byte = []byte(value)
-	length := len(data)
-
-	end := data[length-1]
-	var base uint64 = 1
-	switch end {
-	case 'h':
-		length--
-		base = base * 60 * 60 * 1000
-	case 'm':
-		length--
-		base = base * 60 * 1000
-	case 's':
-		length--
-		if data[length-1] == 'm' { //msec
-			length--
-		} else { //sec
-			base = base * 1000
-		}
+	ret, err := time.ParseDuration(value)
+	if err == nil {
+		return ret, true
 	}
 
-	newStr := string(data[:length])
-
-	ret, ok := strToUint64(newStr)
-	if ok {
-		ret = ret * base
-		return Msec_t(ret), true
-	}
-
-	return 0, false
+	return time.Duration(0), false
 }
 
-func defaultMsec(value string) Msec_t {
-	ret, ok := strToMsec(value)
+func defaultTimeDuration(value string) time.Duration {
+	ret, ok := strToTimeDuration(value)
 
 	if ok {
 		return ret
 	}
 
-	return 0
+	return time.Duration(0)
 }
 
-func confMsec(value string, defaultVal Msec_t) Msec_t {
-	ret, ok := strToMsec(value)
+func confTimeDuration(value string, defaultVal time.Duration) time.Duration {
+	ret, ok := strToTimeDuration(value)
 
 	if ok {
 		return ret
@@ -270,9 +244,10 @@ func Config(f *ini.File, secName string, it interface{}) bool {
 		case "Size_t":
 			confV := confValue(strings.ToLower(fn), s)
 			value.SetUint(uint64(confSize(confV, defaultSize(fd))))
-		case "Msec_t":
+		case "Duration":
 			confV := confValue(strings.ToLower(fn), s)
-			value.SetUint(uint64(confMsec(confV, defaultMsec(fd))))
+			value.SetInt(int64(confTimeDuration(confV,
+				defaultTimeDuration(fd))))
 		default:
 			fmt.Printf("Unsuppoted config, secName: %s, name: %s, type: %s\n",
 				secName, fn, ft)
