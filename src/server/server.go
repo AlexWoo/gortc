@@ -33,27 +33,20 @@ func recv(w http.ResponseWriter, req *http.Request) {
 		WriteBufferSize: 64 * 1024,
 		CheckOrigin:     wsCheckOrigin,
 	}
+
 	c, err := upgrade.Upgrade(w, req, nil)
 	if err != nil {
 		fmt.Println("websocket server: ", err)
 		return
 	}
 
-	conn := conns["a"]
-	if conn == nil {
-		conn = rtclib.NewWSConn("a", "", rtclib.UAS, 3*time.Second, 1024, handler)
-		if conn == nil {
-			return
-		}
-		conns["a"] = conn
-
-		conn.SetConn(c)
+	conn := rtclib.NewWSConn("a", "", rtclib.UAS, 3*time.Second, 1024, handler)
+	if conns["a"] == nil {
 		go send(conn)
-	} else {
-		conn.SetConn(c)
+		conns["a"] = conn
 	}
 
-	conn.Accept()
+	conn.Accept(c)
 }
 
 func main() {
