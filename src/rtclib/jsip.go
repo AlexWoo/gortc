@@ -11,8 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	simplejson "github.com/bitly/go-simplejson"
+	"github.com/go-ini/ini"
 )
 
 // return value
@@ -164,11 +166,6 @@ const (
 )
 
 const (
-	UAS = iota
-	UAC
-)
-
-const (
 	RECV = iota
 	SEND
 )
@@ -189,6 +186,9 @@ type JSIP struct {
 	Router     []string
 	Body       interface{}
 	RawMsg     map[string]interface{}
+
+	transaction *JSIPTrasaction
+	session     *JSIPSession
 }
 
 type JSIPTrasaction struct {
@@ -200,7 +200,7 @@ type JSIPTrasaction struct {
 }
 
 type JSIPSession struct {
-	conn    *JSIPConn
+	conn    Conn
 	typ     int
 	state   int
 	uatype  int
@@ -209,19 +209,79 @@ type JSIPSession struct {
 	handler func(session *JSIPSession, jsip *JSIP, sendrecv int) int
 }
 
+type JSIPConfig struct {
+	Location string `default:"rtc"`
+	Realm    string
+	Timeout  time.Duration `default:"1s"`
+	Qsize    Size_t        `default:"1k"`
+}
+
+type JSIPStack struct {
+	config     *JSIPConfig
+	jsipHandle func(jsip *JSIP)
+	log        *Log
+	conns      sync.Map //map[string]Conn
+}
+
 var (
+	jstack        *JSIPStack
 	Jtransactions = make(map[string]*JSIPTrasaction)
 	Jsessions     = make(map[string]*JSIPSession)
 	JsessLock     sync.RWMutex
 	JtransLock    sync.RWMutex
 )
 
-var (
-	jsipHandle  func(jsip *JSIP)
-	rtclog      *Log
-	realm       string
-	rtclocation string
-)
+func (stack *JSIPStack) loadConfig() bool {
+	stack.config = new(JSIPConfig)
+
+	confPath := RTCPATH + "/conf/gortc.ini"
+
+	f, err := ini.Load(confPath)
+	if err != nil {
+		jstack.log.LogError("Load config file %s error: %v", confPath, err)
+		return false
+	}
+
+	return Config(f, "JSIPStack", stack.config)
+}
+
+func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
+	jstack = &JSIPStack{
+		jsipHandle: h,
+		log:        log,
+	}
+
+	if !jstack.loadConfig() {
+		return nil
+	}
+
+	if jstack.config.Realm == "" {
+		jstack.log.LogError("JSIPStack Realm not configured")
+		return nil
+	}
+
+	return jstack
+}
+
+func (stack *JSIPStack) RecvMsg(conn Conn, data []byte) {
+	recvJsonSIPMsg(conn, data)
+}
+
+func (stack *JSIPStack) Location() string {
+	return stack.config.Location
+}
+
+func (stack *JSIPStack) Realm() string {
+	return stack.config.Realm
+}
+
+func (stack *JSIPStack) Timeout() time.Duration {
+	return stack.config.Timeout
+}
+
+func (stack *JSIPStack) Qsize() uint64 {
+	return uint64(stack.config.Qsize)
+}
 
 func JsessGet(dlg string) *JSIPSession {
 	JsessLock.RLock()
@@ -259,15 +319,49 @@ func JtransDel(tid string) {
 	delete(Jtransactions, tid)
 }
 
-func InitHandler(h func(jsip *JSIP), log *Log, rlm string, location string) {
-	jsipHandle = h
-	rtclog = log
-	realm = rlm
-	rtclocation = location
-}
-
 func transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
+}
+
+func parseUri(uri string) (string, string) {
+	var userWithHost, hostWithPort string
+
+	ss := strings.Split(uri, ";")
+	uri = ss[0]
+
+	ss = strings.Split(uri, "@")
+	if len(ss) == 1 {
+		hostWithPort = ss[0]
+	} else {
+		hostWithPort = ss[1]
+	}
+
+	ss = strings.Split(uri, ":")
+	userWithHost = ss[0]
+
+	return userWithHost, hostWithPort
+}
+
+func connect(uri string) *WSConn {
+	userWithHost, hostWithPort := parseUri(uri)
+	if userWithHost == "" {
+		return nil
+	}
+
+	url := "ws://" + hostWithPort + jstack.Location() + "?userid=" +
+		jstack.Realm()
+	conn := NewWSConn(userWithHost, url, UAC, jstack.Timeout(), jstack.Qsize(),
+		recvJsonSIPMsg)
+
+	vv, ok := jstack.conns.LoadOrStore(userWithHost, conn)
+	if ok {
+		conn = vv.(*WSConn)
+		return conn
+	}
+
+	conn.Dial()
+
+	return conn
 }
 
 // interface
@@ -309,27 +403,27 @@ func JsipName(jsip *JSIP) string {
 }
 
 func SendJSIPReq(req *JSIP, dlg string) {
-	var conn *JSIPConn
+	var conn *WSConn
 
 	if JsessGet(dlg) == nil {
 		if len(req.Router) > 0 {
 			// Use Router Header 0 as default route if exist
-			conn = jstack.RTCClient(req.Router[0])
+			conn = connect(req.Router[0])
 		} else {
 			// Use Request-URI as default route if Router Header not exist
-			conn = jstack.RTCClient(req.RequestURI)
+			conn = connect(req.RequestURI)
 		}
 
 		if conn == nil {
 			return
 		}
 	} else {
-		conn = JsessGet(dlg).conn
+		conn = JsessGet(dlg).conn.(*WSConn)
 	}
 
 	req.DialogueID = dlg
 
-	SendJsonSIPMsg(conn, req)
+	sendJsonSIPMsg(conn, req)
 }
 
 func SendJSIPRes(req *JSIP, code int) {
@@ -348,7 +442,7 @@ func SendJSIPRes(req *JSIP, code int) {
 		RawMsg:     make(map[string]interface{}),
 	}
 
-	SendJsonSIPMsg(nil, resp)
+	sendJsonSIPMsg(nil, resp)
 }
 
 func SendJSIPAck(resp *JSIP) {
@@ -362,7 +456,7 @@ func SendJSIPAck(resp *JSIP) {
 
 	resp.RawMsg["RelatedID"] = resp.CSeq
 
-	SendJsonSIPMsg(nil, ack)
+	sendJsonSIPMsg(nil, ack)
 }
 
 func SendJSIPBye(session *JSIPSession) {
@@ -371,7 +465,7 @@ func SendJSIPBye(session *JSIPSession) {
 		DialogueID: session.req.DialogueID,
 	}
 
-	SendJsonSIPMsg(nil, resp)
+	sendJsonSIPMsg(nil, resp)
 }
 
 func SendJSIPCancel(session *JSIPSession, req *JSIP) {
@@ -391,7 +485,7 @@ func SendJSIPCancel(session *JSIPSession, req *JSIP) {
 
 	resp.RawMsg["RelatedID"] = req.CSeq
 
-	SendJsonSIPMsg(nil, resp)
+	sendJsonSIPMsg(nil, resp)
 }
 
 // Syntax Layer
@@ -869,7 +963,7 @@ func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 	return OK
 }
 
-func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
+func jsipSession(conn Conn, jsip *JSIP, sendrecv int) int {
 	session := JsessGet(jsip.DialogueID)
 	if session == nil {
 		if jsip.Code != 0 {
@@ -920,7 +1014,8 @@ func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 	if sendrecv == RECV {
 		jstack.jsipHandle(jsip)
 	} else {
-		session.conn.sendq <- jsip.RawMsg
+		data, _ := json.Marshal(jsip.RawMsg)
+		session.conn.Send(data)
 	}
 
 	if session.typ == INVITE {
@@ -936,33 +1031,33 @@ func jsipSession(conn *JSIPConn, jsip *JSIP, sendrecv int) int {
 	return OK
 }
 
-func RecvJsonSIPMsg(conn *JSIPConn, data []byte) bool {
+func recvJsonSIPMsg(conn Conn, data []byte) {
 	// Syntax Layer
 	jsip, err := jsipUnParser(data)
 	if err != nil {
 		jstack.log.LogError("UnParser Json sip message failed, msg: %s err: %v",
 			string(data), err)
-		return false
+		return
 	}
 
 	fmt.Println("Recv:", jsip)
 	// Transaction Layer
 	switch jsipTrasaction(jsip, RECV) {
 	case ERROR:
-		return false
+		return
 	case IGNORE:
-		return true
+		return
 	}
 
 	// Session Layer
 	if jsipSession(conn, jsip, RECV) == ERROR {
-		return false
+		return
 	}
 
-	return true
+	return
 }
 
-func SendJsonSIPMsg(conn *JSIPConn, jsip *JSIP) {
+func sendJsonSIPMsg(conn Conn, jsip *JSIP) {
 	// Syntax Layer
 	j, err := jsipPrepared(jsip)
 	if err != nil {

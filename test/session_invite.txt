@@ -16,7 +16,6 @@
 
 {
     "type": "recv",
-    "timeout": "1s",
     "value": {
         "Type": "RESPONSE",
         "Code": 200,

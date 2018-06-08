@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-ini/ini"
+	"github.com/gorilla/websocket"
 )
 
 type RTCModuleConfig struct {
@@ -88,6 +89,37 @@ func (m *RTCModule) LoadConfig() bool {
 	return rtclib.Config(f, "RTCModule", m.config)
 }
 
+func wsCheckOrigin(r *http.Request) bool {
+	//Access Control from here
+	return true
+}
+
+func (m *RTCModule) handler(w http.ResponseWriter, req *http.Request) {
+	userid := req.URL.Query().Get("userid")
+	if userid == "" {
+		LogError("Miss userid")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  64 * 1024,
+		WriteBufferSize: 64 * 1024,
+		CheckOrigin:     wsCheckOrigin,
+	}
+
+	c, err := upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		LogError("Create Websocket server failed, %v", err)
+		return
+	}
+
+	conn := rtclib.NewWSConn(userid, "", rtclib.UAS, m.jstack.Timeout(),
+		m.jstack.Qsize(), m.jstack.RecvMsg)
+
+	conn.Accept(c)
+}
+
 func (m *RTCModule) Init() bool {
 	initLog(m.config)
 
@@ -103,7 +135,7 @@ func (m *RTCModule) Init() bool {
 	}
 
 	serveMux := &http.ServeMux{}
-	serveMux.HandleFunc(m.jstack.Location(), m.jstack.RTCServer)
+	serveMux.HandleFunc(m.jstack.Location(), m.handler)
 
 	if m.config.Listen != "" {
 		m.server = &http.Server{Addr: m.config.Listen, Handler: serveMux}
