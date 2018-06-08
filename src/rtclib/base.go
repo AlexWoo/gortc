@@ -17,7 +17,7 @@ type Conn interface {
 	Dial()
 
 	// Accept connection as server
-	Accept()
+	Accept(data interface{})
 
 	// Send data
 	Send(data []byte)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,11 +21,17 @@ type WSConn struct {
 	uatype    int
 	timeout   time.Duration
 	sendq     chan []byte
-	reconnect chan *websocket.Conn
+	recvq     chan []byte
+	reconnect chan bool
 	quit      chan bool
 	buf       []byte
 	handler   func(c Conn, data []byte)
 }
+
+var (
+	wsconns     = make(map[string]*WSConn)
+	wsconnsLock sync.Mutex
+)
 
 func (c *WSConn) connect() bool {
 	dialer := websocket.DefaultDialer
@@ -34,7 +41,7 @@ func (c *WSConn) connect() bool {
 		conn, _, err := dialer.Dial(c.url, nil)
 		if err == nil { // connect successd
 			go c.read()
-			go c.write()
+			go c.loop()
 			c.conn = conn
 
 			return true
@@ -72,51 +79,65 @@ func (c *WSConn) read() {
 		conn := c.conn
 		_, data, err := conn.ReadMessage()
 		if err == nil {
-			c.handler(c, data)
+			c.recvq <- data
 			continue
 		}
 
 		fmt.Println(time.Now(), "------ read err: ", err)
 
-		c.reconnect <- conn
+		c.recvq <- []byte{}
 
 		return
 	}
 }
 
-func (c *WSConn) write() {
+func (c *WSConn) write(data []byte) bool {
+	err := c.conn.WriteMessage(websocket.TextMessage, data)
+	if err == nil {
+		c.buf = []byte{}
+		return true
+	}
+
+	fmt.Println(time.Now(), "------ write err: ", err)
+
+	c.buf = data
+
+	if websocket.IsCloseError(err) {
+		e := err.(*websocket.CloseError)
+
+		switch e.Code {
+		case websocket.CloseMessageTooBig:
+			c.buf = []byte{}
+		}
+	}
+
+	return false
+}
+
+func (c *WSConn) loop() {
 	var data []byte
 
+	if len(c.buf) != 0 {
+		data = c.buf
+		if !c.write(data) {
+			return
+		}
+	}
+
 	for {
-		if len(c.buf) != 0 {
-			data = c.buf
-		} else {
-			data = <-c.sendq
-		}
-
-		conn := c.conn
-		err := conn.WriteMessage(websocket.TextMessage, data)
-		if err == nil {
-			c.buf = []byte{}
-			continue
-		}
-
-		fmt.Println(time.Now(), "------ write err: ", err)
-
-		c.buf = data
-
-		if websocket.IsCloseError(err) {
-			e := err.(*websocket.CloseError)
-
-			switch e.Code {
-			case websocket.CloseMessageTooBig:
-				c.buf = []byte{}
+		select {
+		case data = <-c.recvq:
+			if len(data) == 0 {
+				c.reconnect <- true
+				return
+			}
+			c.handler(c, data)
+		case data = <-c.sendq:
+			if !c.write(data) {
+				c.reconnect <- true
+				return
 			}
 		}
-
-		c.reconnect <- conn
-
-		return
 	}
 }
 
@@ -128,49 +149,47 @@ func (c *WSConn) write() {
 // 	qsize  : connection send queue size
 // 	handler: handler to call when receive data from websocket connection
 func NewWSConn(name string, url string, uatype int, timeout time.Duration,
-	qsize uint32, handler func(c Conn, data []byte)) *WSConn {
+	qsize uint64, handler func(c Conn, data []byte)) *WSConn {
 
-	if uatype == UAC && url == "" {
+	if uatype == UAC && !(strings.HasPrefix(url, "ws://") ||
+		strings.HasPrefix(url, "wss://")) {
+
 		return nil
 	}
 
-	conn := &WSConn{
+	wsconnsLock.Lock()
+	defer wsconnsLock.Unlock()
+
+	conn := wsconns[name]
+	if conn != nil {
+		return conn
+	}
+
+	conn = &WSConn{
 		name:      name,
 		url:       url,
 		uatype:    uatype,
 		timeout:   timeout,
 		sendq:     make(chan []byte, qsize),
-		reconnect: make(chan *websocket.Conn, 2),
+		recvq:     make(chan []byte, qsize),
+		reconnect: make(chan bool),
 		quit:      make(chan bool),
 		handler:   handler,
 	}
+	wsconns[name] = conn
 
 	return conn
 }
 
-// Set websocket connection to WSConn
-// 	conn: websocket.Conn
-func (c *WSConn) SetConn(conn *websocket.Conn) {
-	c.conn = conn
-}
-
 // Dial to remote websocket server
 func (c *WSConn) Dial() {
-	if !c.connect() {
-		return
-	}
-
 	go func() {
+		c.connect()
+
 		for {
 			select {
-			case conn := <-c.reconnect:
-				if conn != c.conn {
-					continue
-				}
-
-				if !c.connect() { // reconnect
-					return
-				}
+			case <-c.reconnect:
+				c.connect()
 			case <-c.quit:
 				c.conn.Close()
 				return
@@ -180,17 +199,16 @@ func (c *WSConn) Dial() {
 }
 
 // Accept remote websocket connection
-func (c *WSConn) Accept() {
+//	conn: websocket conn
+func (c *WSConn) Accept(conn interface{}) {
+	c.conn = conn.(*websocket.Conn)
+
 	go c.read()
-	go c.write()
+	go c.loop()
 
 	for {
 		select {
-		case conn := <-c.reconnect:
-			if conn != c.conn {
-				continue
-			}
-
+		case <-c.reconnect:
 			return
 		case <-c.quit:
 			c.conn.Close()
@@ -207,5 +225,9 @@ func (c *WSConn) Send(data []byte) {
 
 // Close websocket connection
 func (c *WSConn) Close() {
+	wsconnsLock.Lock()
+	delete(wsconns, c.name)
+	wsconnsLock.Unlock()
+
 	c.quit <- true
 }
