@@ -142,6 +142,7 @@ const (
 	INVITE_RE200
 	INVITE_ERR
 	INVITE_END
+	INVITE_TERM
 )
 
 var jsipInviteState = map[int]string{
@@ -156,6 +157,7 @@ var jsipInviteState = map[int]string{
 	INVITE_RE200:  "INVITE_RE200",
 	INVITE_ERR:    "INVITE_ERR",
 	INVITE_END:    "INVITE_END",
+	INVITE_TERM:   "INVITE_TERM",
 }
 
 const (
@@ -520,6 +522,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		return ERROR
 	}
 
+	jsip.Type = trans.Type
+
 	if jsip.Code == 100 {
 		if trans.State > TRANS_TRYING {
 			stack.log.LogError("process 100 Trying but state is %d", trans.State)
@@ -530,8 +534,6 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 		return IGNORE
 	}
-
-	jsip.Type = trans.Type
 
 	if jsip.Code < 200 && jsip.Code > 100 {
 		if trans.State > TRANS_PR {
@@ -699,11 +701,12 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 		}
 	case INVITE_ERR:
 		if jsip.Type == ACK { // ERR ACK
-			session.State = INVITE_END
+			session.State = INVITE_TERM
 			return IGNORE
 		}
 	case INVITE_END:
 		if jsip.Type == BYE && jsip.Code > 0 {
+			session.State = INVITE_TERM
 			return OK
 		}
 	}
@@ -771,7 +774,6 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 		session = &JSIPSession{
 			Type: jsip.Type,
 			req:  jsip,
-			cseq: jsip.CSeq,
 		}
 
 		if sendrecv == RECV {
@@ -792,10 +794,20 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 		}
 	}
 
+	if jsip.Code == 0 {
+		if sendrecv == RECV {
+			session.cseq = jsip.CSeq
+		} else {
+			session.cseq++
+			jsip.CSeq = session.cseq
+			jsip.RawMsg["CSeq"] = jsip.CSeq
+		}
+	}
+
 	ret := session.handler(session, jsip, sendrecv)
 
 	if session.Type == INVITE {
-		if session.State == INVITE_END {
+		if session.State == INVITE_TERM {
 			delete(stack.sessions, jsip.DialogueID)
 		}
 	} else {
@@ -876,11 +888,11 @@ func (stack *JSIPStack) run() {
 	for {
 		select {
 		case jsip := <-stack.recvq:
-			fmt.Println("Recv:", jsip.Abstract())
 			stack.recvJSIPMsg(jsip)
+			fmt.Println("Recv:", jsip.Abstract())
 		case jsip := <-stack.sendq:
-			fmt.Println("Send:", jsip.Abstract())
 			stack.sendJSIPMsg(jsip)
+			fmt.Println("Send:", jsip.Abstract())
 		}
 	}
 }
@@ -948,8 +960,8 @@ func (jsip *JSIP) Abstract() string {
 	if jsip.Code == 0 {
 		abstract += " RequestURI: " + jsip.RequestURI
 	}
-	abstract += " From: " + jsip.From + " To: " + jsip.To + " DialogueID: " +
-		jsip.DialogueID
+	abstract += " From: " + jsip.From + " To: " + jsip.To + " CSeq: " +
+		strconv.Itoa(int(jsip.CSeq)) + " DialogueID: " + jsip.DialogueID
 
 	if len(jsip.Router) > 0 {
 		abstract += " Router: " + jsip.Router[0]
