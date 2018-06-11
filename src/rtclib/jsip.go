@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	simplejson "github.com/bitly/go-simplejson"
@@ -187,26 +186,30 @@ type JSIP struct {
 	Body       interface{}
 	RawMsg     map[string]interface{}
 
-	transaction *JSIPTrasaction
-	session     *JSIPSession
+	conn        Conn
+	Transaction *JSIPTrasaction
+	Session     *JSIPSession
 }
 
 type JSIPTrasaction struct {
-	typ    int
-	state  int
-	uatype int
+	Type   int
+	State  int
+	UAType int
 	req    *JSIP
 	cseq   uint64
+
+	conn Conn
 }
 
 type JSIPSession struct {
-	conn    Conn
-	typ     int
-	state   int
-	uatype  int
+	Type    int
+	State   int
+	UAType  int
 	req     *JSIP
 	cseq    uint64
 	handler func(session *JSIPSession, jsip *JSIP, sendrecv int) int
+
+	conn Conn
 }
 
 type JSIPConfig struct {
@@ -220,16 +223,15 @@ type JSIPStack struct {
 	config     *JSIPConfig
 	jsipHandle func(jsip *JSIP)
 	log        *Log
-	conns      sync.Map //map[string]Conn
+
+	recvq chan *JSIP
+	sendq chan *JSIP
+
+	sessions     map[string]*JSIPSession
+	transactions map[string]*JSIPTrasaction
 }
 
-var (
-	jstack        *JSIPStack
-	Jtransactions = make(map[string]*JSIPTrasaction)
-	Jsessions     = make(map[string]*JSIPSession)
-	JsessLock     sync.RWMutex
-	JtransLock    sync.RWMutex
-)
+var jstack *JSIPStack
 
 func (stack *JSIPStack) loadConfig() bool {
 	stack.config = new(JSIPConfig)
@@ -245,85 +247,11 @@ func (stack *JSIPStack) loadConfig() bool {
 	return Config(f, "JSIPStack", stack.config)
 }
 
-func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
-	jstack = &JSIPStack{
-		jsipHandle: h,
-		log:        log,
-	}
-
-	if !jstack.loadConfig() {
-		return nil
-	}
-
-	if jstack.config.Realm == "" {
-		jstack.log.LogError("JSIPStack Realm not configured")
-		return nil
-	}
-
-	return jstack
-}
-
-func (stack *JSIPStack) RecvMsg(conn Conn, data []byte) {
-	recvJsonSIPMsg(conn, data)
-}
-
-func (stack *JSIPStack) Location() string {
-	return stack.config.Location
-}
-
-func (stack *JSIPStack) Realm() string {
-	return stack.config.Realm
-}
-
-func (stack *JSIPStack) Timeout() time.Duration {
-	return stack.config.Timeout
-}
-
-func (stack *JSIPStack) Qsize() uint64 {
-	return uint64(stack.config.Qsize)
-}
-
-func JsessGet(dlg string) *JSIPSession {
-	JsessLock.RLock()
-	defer JsessLock.RUnlock()
-	return Jsessions[dlg]
-}
-
-func JsessSet(dlg string, session *JSIPSession) {
-	JsessLock.Lock()
-	defer JsessLock.Unlock()
-	Jsessions[dlg] = session
-}
-
-func JsessDel(dlg string) {
-	JsessLock.Lock()
-	defer JsessLock.Unlock()
-	delete(Jsessions, dlg)
-}
-
-func JtransGet(tid string) *JSIPTrasaction {
-	JtransLock.RLock()
-	defer JtransLock.RUnlock()
-	return Jtransactions[tid]
-}
-
-func JtransSet(tid string, trans *JSIPTrasaction) {
-	JtransLock.Lock()
-	defer JtransLock.Unlock()
-	Jtransactions[tid] = trans
-}
-
-func JtransDel(tid string) {
-	JtransLock.Lock()
-	defer JtransLock.Unlock()
-	delete(Jtransactions, tid)
-}
-
-func transactionID(jsip *JSIP, cseq uint64) string {
+func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
 
-func parseUri(uri string) (string, string) {
+func (stack *JSIPStack) parseUri(uri string) (string, string) {
 	var userWithHost, hostWithPort string
 
 	ss := strings.Split(uri, ";")
@@ -342,8 +270,8 @@ func parseUri(uri string) (string, string) {
 	return userWithHost, hostWithPort
 }
 
-func connect(uri string) *WSConn {
-	userWithHost, hostWithPort := parseUri(uri)
+func (stack *JSIPStack) connect(uri string) *WSConn {
+	userWithHost, hostWithPort := stack.parseUri(uri)
 	if userWithHost == "" {
 		return nil
 	}
@@ -351,225 +279,15 @@ func connect(uri string) *WSConn {
 	url := "ws://" + hostWithPort + jstack.Location() + "?userid=" +
 		jstack.Realm()
 	conn := NewWSConn(userWithHost, url, UAC, jstack.Timeout(), jstack.Qsize(),
-		recvJsonSIPMsg)
-
-	vv, ok := jstack.conns.LoadOrStore(userWithHost, conn)
-	if ok {
-		conn = vv.(*WSConn)
-		return conn
-	}
+		RecvMsg)
 
 	conn.Dial()
 
 	return conn
 }
 
-// interface
-func JsipParseUri(uri string) (string, string, []string) {
-	var user, host string
-	var paras []string
-
-	ss := strings.Split(uri, "@")
-	if len(ss) == 1 {
-		host = ss[0]
-	} else if len(ss) == 2 {
-		user = ss[0]
-		host = ss[1]
-	} else {
-		return user, host, paras
-	}
-
-	ss = strings.Split(host, ";")
-	if len(ss) > 1 {
-		host = ss[0]
-		paras = ss[1:]
-	}
-
-	return user, host, paras
-}
-
-func JsipName(jsip *JSIP) string {
-	req := jsipReqParse[jsip.Type]
-	if req == "" {
-		req = "UNKNOWN"
-	}
-
-	if jsip.Code == 0 {
-		return req
-	} else {
-		code := strconv.Itoa(jsip.Code)
-		return req + "_" + code
-	}
-}
-
-func SendJSIPReq(req *JSIP, dlg string) {
-	var conn *WSConn
-
-	if JsessGet(dlg) == nil {
-		if len(req.Router) > 0 {
-			// Use Router Header 0 as default route if exist
-			conn = connect(req.Router[0])
-		} else {
-			// Use Request-URI as default route if Router Header not exist
-			conn = connect(req.RequestURI)
-		}
-
-		if conn == nil {
-			return
-		}
-	} else {
-		conn = JsessGet(dlg).conn.(*WSConn)
-	}
-
-	req.DialogueID = dlg
-
-	sendJsonSIPMsg(conn, req)
-}
-
-func SendJSIPRes(req *JSIP, code int) {
-	if req.Code != 0 {
-		jstack.log.LogError("Cannot send response for response")
-		return
-	}
-
-	resp := &JSIP{
-		Type:       req.Type,
-		Code:       code,
-		From:       req.From,
-		To:         req.To,
-		CSeq:       req.CSeq,
-		DialogueID: req.DialogueID,
-		RawMsg:     make(map[string]interface{}),
-	}
-
-	sendJsonSIPMsg(nil, resp)
-}
-
-func SendJSIPAck(resp *JSIP) {
-	ack := &JSIP{
-		Type:       ACK,
-		From:       resp.From,
-		To:         resp.To,
-		DialogueID: resp.DialogueID,
-		RawMsg:     make(map[string]interface{}),
-	}
-
-	resp.RawMsg["RelatedID"] = resp.CSeq
-
-	sendJsonSIPMsg(nil, ack)
-}
-
-func SendJSIPBye(session *JSIPSession) {
-	resp := &JSIP{
-		Type:       BYE,
-		DialogueID: session.req.DialogueID,
-	}
-
-	sendJsonSIPMsg(nil, resp)
-}
-
-func SendJSIPCancel(session *JSIPSession, req *JSIP) {
-	if req.Type >= 100 {
-		jstack.log.LogError("Cannot cancel response")
-		return
-	}
-
-	resp := &JSIP{
-		Type:       CANCEL,
-		RequestURI: req.RequestURI,
-		From:       req.From,
-		To:         req.To,
-		DialogueID: session.req.DialogueID,
-		RawMsg:     make(map[string]interface{}),
-	}
-
-	resp.RawMsg["RelatedID"] = req.CSeq
-
-	sendJsonSIPMsg(nil, resp)
-}
-
-// Syntax Layer
-func jsipPrepared(jsip *JSIP) (*JSIP, error) {
-	if jsip.DialogueID == "" {
-		return nil, errors.New("DialogueID not set")
-	}
-
-	if jsipReqParse[jsip.Type] == "" {
-		return nil, errors.New("Unknown message type")
-	}
-
-	if jsip.Code != 0 && (jsip.Code < 100 || jsip.Code > 699) {
-		return nil, fmt.Errorf("Unknown response %s", JsipName(jsip))
-	}
-
-	if jsip.RawMsg == nil {
-		jsip.RawMsg = make(map[string]interface{})
-	}
-
-	session := JsessGet(jsip.DialogueID)
-	if session == nil {
-		if jsip.Code != 0 {
-			return nil, errors.New("Cannot send Response for a new session")
-		}
-
-		if jsip.RequestURI == "" || jsip.From == "" || jsip.To == "" {
-			return nil, errors.New("Must header not set for first request")
-		}
-
-		jsip.CSeq = 1
-	} else {
-		if jsip.RequestURI == "" {
-			jsip.RequestURI = session.req.RequestURI
-		}
-
-		if jsip.From == "" {
-			jsip.From = session.req.From
-		}
-
-		if jsip.To == "" {
-			jsip.To = session.req.To
-		}
-
-		if jsip.Code == 0 { // Request
-			session.cseq++
-			jsip.CSeq = session.cseq
-		} else {
-			if jsip.CSeq == 0 {
-				return nil, errors.New("Prepared response but CSeq not set")
-			}
-		}
-	}
-
-	if jsip.Code != 0 {
-		jsip.RawMsg["Type"] = "RESPONSE"
-		jsip.RawMsg["Code"] = jsip.Code
-		jsip.RawMsg["Desc"] = jsipResDesc[jsip.Code]
-	} else {
-		jsip.RawMsg["Type"] = jsipReqParse[jsip.Type]
-		jsip.RawMsg["Request-URI"] = jsip.RequestURI
-	}
-
-	jsip.RawMsg["From"] = jsip.From
-	jsip.RawMsg["To"] = jsip.To
-	jsip.RawMsg["DialogueID"] = jsip.DialogueID
-	jsip.RawMsg["CSeq"] = jsip.CSeq
-
-	if len(jsip.Router) > 0 {
-		router := jsip.Router[0]
-		for i := 1; i < len(jsip.Router); i++ {
-			router += ", " + jsip.Router[i]
-		}
-		jsip.RawMsg["Router"] = router
-	}
-
-	if jsip.Body != nil {
-		jsip.RawMsg["Body"] = jsip.Body
-	}
-
-	return jsip, nil
-}
-
-func jsipUnParser(data []byte) (*JSIP, error) {
+// Syntax Check
+func (stack *JSIPStack) jsipUnParser(data []byte) (*JSIP, error) {
 	json, err := simplejson.NewJson(data)
 	if err != nil {
 		return nil, err
@@ -635,80 +353,154 @@ func jsipUnParser(data []byte) (*JSIP, error) {
 
 	jsip.Body = json.Get("Body")
 
-	session := JsessGet(jsip.DialogueID)
-	if session != nil {
-		if jsip.Code == 0 && jsip.CSeq > session.cseq {
-			session.cseq = jsip.CSeq
+	return jsip, nil
+}
+
+func (stack *JSIPStack) jsipPrepared(jsip *JSIP) (*JSIP, error) {
+	if jsip.DialogueID == "" {
+		return nil, errors.New("DialogueID not set")
+	}
+
+	if jsipReqParse[jsip.Type] == "" {
+		return nil, errors.New("Unknown message type")
+	}
+
+	if jsip.Code != 0 && (jsip.Code < 100 || jsip.Code > 699) {
+		return nil, fmt.Errorf("Unknown response %s", jsip.Name())
+	}
+
+	if jsip.From == "" {
+		return nil, errors.New("From not set")
+	}
+
+	if jsip.To == "" {
+		return nil, errors.New("To not set")
+	}
+
+	if jsip.Code == 0 {
+		if jsip.RequestURI == "" {
+			return nil, errors.New("RequestURI not set in JSIP Request")
 		}
+	} else {
+		if jsip.CSeq == 0 {
+			return nil, errors.New("CSeq not set in JSIP Response")
+		}
+	}
+
+	if jsip.RawMsg == nil {
+		jsip.RawMsg = make(map[string]interface{})
+	}
+
+	if jsip.Code != 0 {
+		jsip.RawMsg["Type"] = "RESPONSE"
+		jsip.RawMsg["Code"] = jsip.Code
+		jsip.RawMsg["Desc"] = jsipResDesc[jsip.Code]
+		jsip.RawMsg["CSeq"] = jsip.CSeq
+	} else {
+		jsip.RawMsg["Type"] = jsipReqParse[jsip.Type]
+		jsip.RawMsg["Request-URI"] = jsip.RequestURI
+	}
+
+	jsip.RawMsg["From"] = jsip.From
+	jsip.RawMsg["To"] = jsip.To
+	jsip.RawMsg["DialogueID"] = jsip.DialogueID
+
+	if len(jsip.Router) > 0 {
+		router := jsip.Router[0]
+		for i := 1; i < len(jsip.Router); i++ {
+			router += ", " + jsip.Router[i]
+		}
+		jsip.RawMsg["Router"] = router
+	}
+
+	if jsip.Body != nil {
+		jsip.RawMsg["Body"] = jsip.Body
 	}
 
 	return jsip, nil
 }
 
 // Transaction Layer
-func jsipTrasaction(jsip *JSIP, sendrecv int) int {
-	tid := transactionID(jsip, jsip.CSeq)
-	trans := JtransGet(tid)
+func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
+	tid := stack.transactionID(jsip, jsip.CSeq)
+	trans := stack.transactions[tid]
+	jsip.Transaction = trans
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
-			jstack.log.LogError("process %s but trans is nil", JsipName(jsip))
+			stack.log.LogError("process %s but trans is nil", jsip.Name())
 			return ERROR
 		}
 
 		trans = &JSIPTrasaction{
-			typ:   jsip.Type,
-			state: TRANS_REQ,
+			Type:  jsip.Type,
+			State: TRANS_REQ,
 			req:   jsip,
 			cseq:  jsip.CSeq,
 		}
 
-		JtransSet(tid, trans)
-
 		if sendrecv == RECV {
-			trans.uatype = UAS
+			trans.UAType = UAS
+			trans.conn = jsip.conn
 		} else {
-			trans.uatype = UAC
+			trans.UAType = UAC
 		}
 
+		stack.transactions[tid] = trans
+		jsip.Transaction = trans
+
 		if jsip.Type == ACK {
-			JtransDel(tid)
+			delete(stack.transactions, tid)
 
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
-				jstack.log.LogInfo("ACK miss RelatedID")
+				stack.log.LogInfo("ACK miss RelatedID")
 				return IGNORE
 			}
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
-			tid = transactionID(jsip, rid)
-			ackTrans := JtransGet(tid)
+			tid = stack.transactionID(jsip, rid)
+			ackTrans := stack.transactions[tid]
 			if ackTrans == nil {
-				jstack.log.LogInfo("Transaction INVITE not exist")
+				stack.log.LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
-			JtransDel(tid)
+			delete(stack.transactions, tid)
 		}
 
 		if jsip.Type == CANCEL {
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
-				jstack.log.LogInfo("CANCEL miss RelatedID")
+				stack.log.LogInfo("CANCEL miss RelatedID")
 				return IGNORE
 			}
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
-			tid = transactionID(jsip, rid)
-			cancelTrans := JtransGet(tid)
+			tid = stack.transactionID(jsip, rid)
+			cancelTrans := stack.transactions[tid]
 			if cancelTrans == nil {
-				jstack.log.LogInfo("Transaction Cancelled not exist")
+				stack.log.LogInfo("Transaction Cancelled not exist")
 				return IGNORE
 			}
 
-			if cancelTrans.state == TRANS_FINALRESP {
-				jstack.log.LogInfo("Transaction in finalize response, cannot cancel")
+			if cancelTrans.State == TRANS_FINALRESP {
+				stack.log.LogInfo("Transaction in finalize response, cannot cancel")
 				return IGNORE
+			}
+
+			if sendrecv == RECV {
+				// Send CANCLE 200
+				SendMsg(JSIPMsgRes(jsip, 200))
+				// Send Req 487
+				SendMsg(JSIPMsgRes(cancelTrans.req, 487))
+			}
+		}
+
+		if jsip.Type == BYE {
+			if sendrecv == RECV {
+				// Send BYE 200
+				SendMsg(JSIPMsgRes(jsip, 200))
 			}
 		}
 
@@ -716,61 +508,66 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
-		jstack.log.LogError("process %s but trans exist", JsipName(jsip))
+		stack.log.LogError("process %s but trans exist", jsip.Name())
 		return ERROR
 	}
 
 	// Response
-	if trans.uatype == UAS && sendrecv == RECV ||
-		trans.uatype == UAC && sendrecv == SEND {
+	if trans.UAType == UAS && sendrecv == RECV ||
+		trans.UAType == UAC && sendrecv == SEND {
 
-		jstack.log.LogError("Response direct is same as Request direct")
+		stack.log.LogError("Response direct is same as Request direct")
 		return ERROR
 	}
 
 	if jsip.Code == 100 {
-		if trans.state > TRANS_TRYING {
-			jstack.log.LogError("process 100 Trying but state is %d", trans.state)
+		if trans.State > TRANS_TRYING {
+			stack.log.LogError("process 100 Trying but state is %d", trans.State)
 			return ERROR
 		}
 
-		trans.state = TRANS_TRYING
+		trans.State = TRANS_TRYING
 
 		return IGNORE
 	}
 
-	jsip.Type = trans.typ
+	jsip.Type = trans.Type
 
 	if jsip.Code < 200 && jsip.Code > 100 {
-		if trans.state > TRANS_PR {
-			jstack.log.LogError("process %s but state is %d", JsipName(jsip),
-				trans.state)
+		if trans.State > TRANS_PR {
+			stack.log.LogError("process %s but state is %d", jsip.Name(),
+				trans.State)
 			return ERROR
 		}
 
-		trans.state = TRANS_PR
+		trans.State = TRANS_PR
 
 		return OK
 	}
 
-	if trans.state == TRANS_FINALRESP {
-		jstack.log.LogError("process %s but state is %d", JsipName(jsip),
-			trans.state)
+	if trans.State == TRANS_FINALRESP {
+		stack.log.LogError("process %s but state is %d", jsip.Name(),
+			trans.State)
 		return ERROR
 	}
 
-	trans.state = TRANS_FINALRESP
+	trans.State = TRANS_FINALRESP
 
-	if trans.typ != INVITE {
-		JtransDel(tid)
+	if trans.Type != INVITE {
+		delete(stack.transactions, tid)
+	} else {
+		if jsip.Code >= 300 && sendrecv == RECV {
+			// Send Ack for INVITE 3XX 4XX 5XX 6XX Response
+			SendMsg(JSIPMsgAck(jsip))
+		}
 	}
 
-	if trans.typ == CANCEL && sendrecv == RECV {
+	if trans.Type == CANCEL && sendrecv == RECV {
 		// Ignore CANCEL 200 received
 		return IGNORE
 	}
 
-	if trans.typ == BYE && sendrecv == RECV {
+	if trans.Type == BYE && sendrecv == RECV {
 		// Ignore BYE 200 received
 		return IGNORE
 	}
@@ -779,16 +576,24 @@ func jsipTrasaction(jsip *JSIP, sendrecv int) int {
 }
 
 // Session Layer
-func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
+func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
+	sendrecv int) int {
+
 	if jsip.Type == INFO {
 		return OK
 	}
-	switch session.state {
+
+	if jsip.Type == CANCEL && jsip.Code > 0 {
+		return OK
+	}
+
+	switch session.State {
 	case INVITE_INIT:
 		if jsip.Type == INVITE && jsip.Code == 0 {
-			session.state = INVITE_REQ
+			session.State = INVITE_REQ
 			return OK
 		}
+
 	case INVITE_REQ:
 		switch jsip.Type {
 		case CANCEL:
@@ -796,16 +601,13 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 		case INVITE:
 			switch {
 			case jsip.Code < 200 && jsip.Code > 100:
-				session.state = INVITE_18X
+				session.State = INVITE_18X
 				return OK
 			case jsip.Code == 200:
-				session.state = INVITE_200
+				session.State = INVITE_200
 				return OK
 			case jsip.Code >= 300:
-				session.state = INVITE_ERR
-				if sendrecv == RECV {
-					SendJSIPAck(jsip)
-				}
+				session.State = INVITE_ERR
 				return OK
 			}
 		}
@@ -818,261 +620,478 @@ func jsipInviteSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
 			case jsip.Code < 200 && jsip.Code > 100:
 				return OK
 			case jsip.Code == 200:
-				session.state = INVITE_200
+				session.State = INVITE_200
 				return OK
 			case jsip.Code >= 300:
-				session.state = INVITE_ERR
-				if sendrecv == RECV {
-					SendJSIPAck(jsip)
-				}
+				session.State = INVITE_ERR
 				return OK
 			}
 		case PRACK:
-			if jsip.Code == 0 && sendrecv == session.uatype {
-				session.state = INVITE_PRACK
+			if jsip.Code == 0 && sendrecv == session.UAType {
+				session.State = INVITE_PRACK
 				return OK
 			}
 		case UPDATE:
 			if jsip.Code == 0 {
-				session.state = INVITE_UPDATE
+				session.State = INVITE_UPDATE
 				return OK
 			}
 		}
 	case INVITE_PRACK:
 		if jsip.Code == 200 && jsip.Type == PRACK {
-			session.state = INVITE_18X
+			session.State = INVITE_18X
 			return OK
 		}
 	case INVITE_UPDATE:
 		if jsip.Code == 200 && jsip.Type == UPDATE {
-			session.state = INVITE_18X
+			session.State = INVITE_18X
 			return OK
 		}
 	case INVITE_200:
 		if jsip.Type == ACK {
-			session.state = INVITE_ACK
+			session.State = INVITE_ACK
 			return OK
 		} else if jsip.Type == BYE {
-			if sendrecv == RECV {
-				SendJSIPRes(jsip, 200)
-			}
-			session.state = INVITE_END
+			session.State = INVITE_END
 			return OK
 		}
 	case INVITE_ACK:
 		switch {
 		case jsip.Type == INVITE:
 			if jsip.Code == 0 {
-				session.state = INVITE_REINV
+				session.State = INVITE_REINV
 				return OK
 			}
 		case jsip.Type == UPDATE:
 			if jsip.Code == 0 {
-				SendJSIPRes(jsip, 200)
-				return OK
+				SendMsg(JSIPMsgRes(jsip, 200))
+				return IGNORE
 			}
 
 			if jsip.Code == 200 {
 				if sendrecv == SEND {
 					return OK
+				} else {
+					return IGNORE
 				}
 			}
 		case jsip.Type == BYE:
-			if sendrecv == RECV {
-				SendJSIPRes(jsip, 200)
-			}
-			session.state = INVITE_END
+			session.State = INVITE_END
 			return OK
 		case jsip.Type == INFO: // INFO and INFO 200
 			return OK
 		}
 	case INVITE_REINV:
 		if jsip.Code == 200 && jsip.Type == INVITE {
-			session.state = INVITE_RE200
+			session.State = INVITE_RE200
 			return OK
 		} else if jsip.Type == BYE {
-			if sendrecv == RECV {
-				SendJSIPRes(jsip, 200)
-			}
-			session.state = INVITE_END
+			session.State = INVITE_END
 			return OK
 		}
 	case INVITE_RE200:
 		if jsip.Type == ACK {
-			session.state = INVITE_ACK
+			session.State = INVITE_ACK
 			return OK
 		} else if jsip.Type == BYE {
-			if sendrecv == RECV {
-				SendJSIPRes(jsip, 200)
-			}
-			session.state = INVITE_END
+			session.State = INVITE_END
 			return OK
 		}
 	case INVITE_ERR:
 		if jsip.Type == ACK { // ERR ACK
-			session.state = INVITE_END
+			session.State = INVITE_END
 			return IGNORE
+		}
+	case INVITE_END:
+		if jsip.Type == BYE && jsip.Code > 0 {
+			return OK
 		}
 	}
 
-	jstack.log.LogError("%s %s in %s", jsipDirect[sendrecv], JsipName(jsip),
-		jsipInviteState[session.state])
+	stack.log.LogError("%s %s in %s", jsipDirect[sendrecv], jsip.Name(),
+		jsipInviteState[session.State])
 
 	return ERROR
 }
 
-func jsipDefaultSession(session *JSIPSession, jsip *JSIP, sendrecv int) int {
+func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
+	sendrecv int) int {
+
 	if jsip.Type == CANCEL {
 		return OK
 	}
 
-	switch session.state {
+	switch session.State {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
-			jstack.log.LogError("Recv response %s but session state is DEFAULT_INIT",
-				JsipName(jsip))
+			stack.log.LogError("Recv response %s but session state is DEFAULT_INIT",
+				jsip.Name())
 			return ERROR
 		}
 
-		if session.typ != INVITE && session.typ != REGISTER &&
-			session.typ != OPTIONS && session.typ != MESSAGE &&
-			session.typ != SUBSCRIBE {
+		if session.Type != INVITE && session.Type != REGISTER &&
+			session.Type != OPTIONS && session.Type != MESSAGE &&
+			session.Type != SUBSCRIBE {
 
-			jstack.log.LogError("Session not exist when process msg %s", JsipName(jsip))
-			session.state = DEFAULT_REQ
+			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
+			session.State = DEFAULT_REQ
 			if sendrecv == RECV {
-				SendJSIPRes(jsip, 481)
+				SendMsg(JSIPMsgRes(jsip, 481))
 			}
 			return ERROR
 		}
 
-		session.state = DEFAULT_REQ
+		session.State = DEFAULT_REQ
 
 	case DEFAULT_REQ:
 		if jsip.Code == 0 {
-			jstack.log.LogError("Recv request %s but session state is DEFAULT_REQ",
-				JsipName(jsip))
+			stack.log.LogError("Recv request %s but session state is DEFAULT_REQ",
+				jsip.Name())
 			return ERROR
 		}
 
 		if jsip.Code >= 200 {
-			session.state = DEFAULT_RESP
+			session.State = DEFAULT_RESP
 		}
 	}
 
 	return OK
 }
 
-func jsipSession(conn Conn, jsip *JSIP, sendrecv int) int {
-	session := JsessGet(jsip.DialogueID)
+func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
+	session := stack.sessions[jsip.DialogueID]
+	jsip.Session = session
+
 	if session == nil {
 		if jsip.Code != 0 {
-			jstack.log.LogError("recv response but session is nil")
+			stack.log.LogError("recv response but session is nil")
 			return IGNORE
 		}
 
 		session = &JSIPSession{
-			conn: conn,
-			typ:  jsip.Type,
+			Type: jsip.Type,
 			req:  jsip,
 			cseq: jsip.CSeq,
 		}
 
-		JsessSet(jsip.DialogueID, session)
-
 		if sendrecv == RECV {
-			session.uatype = UAS
+			session.UAType = UAS
+			session.conn = jsip.conn
 		} else {
-			session.uatype = UAC
+			session.UAType = UAC
 		}
 
-		switch session.typ {
+		stack.sessions[jsip.DialogueID] = session
+		jsip.Session = session
+
+		switch session.Type {
 		case INVITE:
-			session.handler = jsipInviteSession
+			session.handler = stack.jsipInviteSession
 		default:
-			session.handler = jsipDefaultSession
+			session.handler = stack.jsipDefaultSession
 		}
 	}
 
-	switch session.handler(session, jsip, sendrecv) {
-	case IGNORE:
-		return IGNORE
-	case ERROR:
-		return ERROR
-	}
+	ret := session.handler(session, jsip, sendrecv)
 
-	if jsip.Type == CANCEL && jsip.Code == 0 && sendrecv == RECV {
-		relatedid, _ := jsip.RawMsg["RelatedID"]
-		rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
-		tid := transactionID(jsip, rid)
-		cancelTrans := JtransGet(tid)
-		// send CANCEL 200 and REQ 487
-		SendJSIPRes(jsip, 200)
-		SendJSIPRes(cancelTrans.req, 487)
-	}
-
-	if sendrecv == RECV {
-		jstack.jsipHandle(jsip)
-	} else {
-		data, _ := json.Marshal(jsip.RawMsg)
-		session.conn.Send(data)
-	}
-
-	if session.typ == INVITE {
-		if session.state == INVITE_END {
-			JsessDel(session.req.DialogueID)
+	if session.Type == INVITE {
+		if session.State == INVITE_END {
+			delete(stack.sessions, jsip.DialogueID)
 		}
 	} else {
-		if session.state == DEFAULT_RESP {
-			JsessDel(session.req.DialogueID)
+		if session.State == DEFAULT_RESP {
+			delete(stack.sessions, jsip.DialogueID)
 		}
 	}
 
-	return OK
+	return ret
 }
 
-func recvJsonSIPMsg(conn Conn, data []byte) {
-	// Syntax Layer
-	jsip, err := jsipUnParser(data)
-	if err != nil {
-		jstack.log.LogError("UnParser Json sip message failed, msg: %s err: %v",
-			string(data), err)
-		return
-	}
-
-	fmt.Println("Recv:", jsip)
+func (stack *JSIPStack) recvJSIPMsg(jsip *JSIP) {
 	// Transaction Layer
-	switch jsipTrasaction(jsip, RECV) {
-	case ERROR:
+	ret := stack.jsipTrasaction(jsip, RECV)
+	if ret == ERROR {
 		return
-	case IGNORE:
+	} else if ret == IGNORE {
 		return
 	}
 
 	// Session Layer
-	if jsipSession(conn, jsip, RECV) == ERROR {
+	ret = stack.jsipSession(jsip, RECV)
+	if ret == ERROR {
+		return
+	} else if ret == IGNORE {
 		return
 	}
 
-	return
+	stack.jsipHandle(jsip)
 }
 
-func sendJsonSIPMsg(conn Conn, jsip *JSIP) {
-	// Syntax Layer
-	j, err := jsipPrepared(jsip)
-	if err != nil {
-		jstack.log.LogError("Prepared Json sip message failed, err %v", err)
-		return
-	}
-
-	fmt.Println("Send:", jsip)
-	// Transaction Layer
-	if jsipTrasaction(jsip, SEND) != OK {
-		return
-	}
-
+func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
 	// Session Layer
-	if jsipSession(conn, j, SEND) == ERROR {
+	ret := stack.jsipSession(jsip, SEND)
+	if ret == ERROR {
+		return
+	} else if ret == IGNORE {
 		return
 	}
+
+	// Transaction Layer
+	ret = stack.jsipTrasaction(jsip, SEND)
+	if ret == ERROR {
+		return
+	} else if ret == IGNORE {
+		return
+	}
+
+	if jsip.Transaction.conn != nil {
+		jsip.conn = jsip.Transaction.conn
+	} else {
+		jsip.conn = jsip.Session.conn
+	}
+
+	if jsip.conn == nil {
+		var conn *WSConn
+		if len(jsip.Router) > 0 {
+			conn = stack.connect(jsip.Router[0])
+		} else {
+			conn = stack.connect(jsip.RequestURI)
+		}
+
+		if conn == nil {
+			//TODO Error
+			return
+		}
+
+		jsip.conn = conn
+		jsip.Transaction.conn = conn
+		jsip.Session.conn = conn
+	}
+
+	data, _ := json.Marshal(jsip.RawMsg)
+	jsip.conn.Send(data)
+}
+
+func (stack *JSIPStack) run() {
+	for {
+		select {
+		case jsip := <-stack.recvq:
+			fmt.Println("Recv:", jsip.Abstract())
+			stack.recvJSIPMsg(jsip)
+		case jsip := <-stack.sendq:
+			fmt.Println("Send:", jsip.Abstract())
+			stack.sendJSIPMsg(jsip)
+		}
+	}
+}
+
+// Init JSIP Stack
+func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
+	jstack = &JSIPStack{
+		jsipHandle:   h,
+		log:          log,
+		sessions:     make(map[string]*JSIPSession),
+		transactions: make(map[string]*JSIPTrasaction),
+	}
+
+	if !jstack.loadConfig() {
+		return nil
+	}
+
+	if jstack.config.Realm == "" {
+		jstack.log.LogError("JSIPStack Realm not configured")
+		return nil
+	}
+
+	jstack.recvq = make(chan *JSIP, jstack.Qsize())
+	jstack.sendq = make(chan *JSIP, jstack.Qsize())
+
+	go jstack.run()
+
+	return jstack
+}
+
+// JStack Config
+func (stack *JSIPStack) Location() string {
+	return stack.config.Location
+}
+
+func (stack *JSIPStack) Realm() string {
+	return stack.config.Realm
+}
+
+func (stack *JSIPStack) Timeout() time.Duration {
+	return stack.config.Timeout
+}
+
+func (stack *JSIPStack) Qsize() uint64 {
+	return uint64(stack.config.Qsize)
+}
+
+// JSIP interface
+func (jsip *JSIP) Name() string {
+	req := jsipReqParse[jsip.Type]
+	if req == "" {
+		req = "UNKNOWN"
+	}
+
+	if jsip.Code == 0 {
+		return req
+	} else {
+		code := strconv.Itoa(jsip.Code)
+		return req + "_" + code
+	}
+}
+
+func (jsip *JSIP) Abstract() string {
+	abstract := jsip.Name()
+	if jsip.Code == 0 {
+		abstract += " RequestURI: " + jsip.RequestURI
+	}
+	abstract += " From: " + jsip.From + " To: " + jsip.To + " DialogueID: " +
+		jsip.DialogueID
+
+	if len(jsip.Router) > 0 {
+		abstract += " Router: " + jsip.Router[0]
+		for i := 1; i < len(jsip.Router); i++ {
+			abstract += "," + jsip.Router[0]
+		}
+	}
+
+	return abstract
+}
+
+func (jsip *JSIP) Detail() string {
+	data, _ := json.Marshal(jsip.RawMsg)
+	detail := jsip.Name() + ": " + string(data)
+
+	return detail
+}
+
+// interface
+func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
+	msg := &JSIP{
+		Type:       req.Type,
+		Code:       req.Code,
+		RequestURI: req.RequestURI,
+		From:       req.From,
+		To:         req.To,
+		CSeq:       req.CSeq,
+		DialogueID: dlg,
+		Router:     req.Router,
+		Body:       req.Body,
+		RawMsg:     req.RawMsg,
+	}
+
+	return msg
+}
+
+func JSIPMsgRes(req *JSIP, code int) *JSIP {
+	if req.Code != 0 {
+		fmt.Println("Cannot send response for response")
+		return nil
+	}
+
+	resp := &JSIP{
+		Type:       req.Type,
+		Code:       code,
+		From:       req.From,
+		To:         req.To,
+		CSeq:       req.CSeq,
+		DialogueID: req.DialogueID,
+		RawMsg:     make(map[string]interface{}),
+
+		conn:        req.conn,
+		Transaction: req.Transaction,
+		Session:     req.Session,
+	}
+
+	return resp
+}
+
+func JSIPMsgAck(resp *JSIP) *JSIP {
+	ack := &JSIP{
+		Type:       ACK,
+		RequestURI: resp.Transaction.req.RequestURI,
+		From:       resp.From,
+		To:         resp.To,
+		DialogueID: resp.DialogueID,
+		RawMsg:     make(map[string]interface{}),
+
+		conn:    resp.conn,
+		Session: resp.Session,
+	}
+
+	ack.RawMsg["RelatedID"] = resp.CSeq
+
+	return ack
+}
+
+func JSIPMsgBye(session *JSIPSession) *JSIP {
+	bye := &JSIP{
+		Type:       BYE,
+		RequestURI: session.req.RequestURI,
+		From:       session.req.From,
+		To:         session.req.To,
+		DialogueID: session.req.DialogueID,
+
+		conn:    session.conn,
+		Session: session,
+	}
+
+	return bye
+}
+
+func JSIPMsgUpdate(session *JSIPSession) *JSIP {
+	update := &JSIP{
+		Type:       UPDATE,
+		RequestURI: session.req.RequestURI,
+		From:       session.req.From,
+		To:         session.req.To,
+		DialogueID: session.req.DialogueID,
+
+		conn:    session.conn,
+		Session: session,
+	}
+
+	return update
+}
+
+func JSIPMsgCancel(trans *JSIPTrasaction) *JSIP {
+	cancel := &JSIP{
+		Type:       CANCEL,
+		RequestURI: trans.req.RequestURI,
+		From:       trans.req.From,
+		To:         trans.req.To,
+		DialogueID: trans.req.DialogueID,
+
+		conn:    trans.conn,
+		Session: trans.req.Session,
+	}
+
+	cancel.RawMsg["RelatedID"] = trans.cseq
+
+	return cancel
+}
+
+func RecvMsg(conn Conn, data []byte) {
+	jsip, err := jstack.jsipUnParser(data)
+	if err != nil {
+		fmt.Println("------- parse error", err)
+		return
+	}
+
+	jsip.conn = conn
+
+	jstack.recvq <- jsip
+}
+
+func SendMsg(j *JSIP) {
+	jsip, err := jstack.jsipPrepared(j)
+	if err != nil {
+		fmt.Println("------- prepared error", err)
+		return
+	}
+
+	jstack.sendq <- jsip
 }

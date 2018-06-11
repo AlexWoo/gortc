@@ -44,7 +44,7 @@ func process(jsip *rtclib.JSIP) {
 
 	if len(jsip.Router) != 0 {
 		router0 := jsip.Router[0]
-		_, _, paras := rtclib.JsipParseUri(router0)
+		paras := strings.Split(router0, ";")[1:]
 
 		for _, para := range paras {
 			if strings.HasPrefix(para, "type=") {
@@ -60,7 +60,7 @@ func process(jsip *rtclib.JSIP) {
 	t.Name = slpname
 	slp := getSLP(t)
 	if slp == nil {
-		rtclib.SendJSIPRes(jsip, 404)
+		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
 		t.DelTask()
 		return
 	}
@@ -115,7 +115,7 @@ func (m *RTCModule) handler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	conn := rtclib.NewWSConn(userid, "", rtclib.UAS, m.jstack.Timeout(),
-		m.jstack.Qsize(), m.jstack.RecvMsg)
+		m.jstack.Qsize(), rtclib.RecvMsg)
 
 	conn.Accept(c)
 }

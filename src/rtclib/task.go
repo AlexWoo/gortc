@@ -54,7 +54,7 @@ func (t *Task) DelTask() {
 	defer taskRWLock.Unlock()
 
 	for _, dlg := range t.dlgs {
-		JsessDel(dlg)
+		//JsessDel(dlg) TODO
 		delete(tasks, dlg)
 	}
 }
