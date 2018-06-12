@@ -142,7 +142,6 @@ const (
 	INVITE_RE200
 	INVITE_ERR
 	INVITE_END
-	INVITE_TERM
 )
 
 var jsipInviteState = map[int]string{
@@ -157,7 +156,6 @@ var jsipInviteState = map[int]string{
 	INVITE_RE200:  "INVITE_RE200",
 	INVITE_ERR:    "INVITE_ERR",
 	INVITE_END:    "INVITE_END",
-	INVITE_TERM:   "INVITE_TERM",
 }
 
 const (
@@ -461,34 +459,56 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
-			tid = stack.transactionID(jsip, rid)
-			ackTrans := stack.transactions[tid]
+			ackid := stack.transactionID(jsip, rid)
+			ackTrans := stack.transactions[ackid]
 			if ackTrans == nil {
 				stack.log.LogInfo("Transaction INVITE not exist")
 				return IGNORE
 			}
 
-			delete(stack.transactions, tid)
+			delete(stack.transactions, ackid)
+
+			if ackTrans.UAType == UAS && sendrecv == SEND ||
+				ackTrans.UAType == UAC && sendrecv == RECV {
+
+				stack.log.LogError("ACK direct is not same as INVITE")
+				return ERROR
+			}
 		}
 
 		if jsip.Type == CANCEL {
 			relatedid, ok := jsip.RawMsg["RelatedID"]
 			if !ok {
+				delete(stack.transactions, tid)
+
 				stack.log.LogInfo("CANCEL miss RelatedID")
 				return IGNORE
 			}
 
 			rid, _ := strconv.ParseUint(string(relatedid.(json.Number)), 10, 64)
-			tid = stack.transactionID(jsip, rid)
-			cancelTrans := stack.transactions[tid]
+			cancelid := stack.transactionID(jsip, rid)
+			cancelTrans := stack.transactions[cancelid]
 			if cancelTrans == nil {
+				delete(stack.transactions, tid)
+
 				stack.log.LogInfo("Transaction Cancelled not exist")
 				return IGNORE
 			}
 
 			if cancelTrans.State == TRANS_FINALRESP {
+				delete(stack.transactions, tid)
+
 				stack.log.LogInfo("Transaction in finalize response, cannot cancel")
 				return IGNORE
+			}
+
+			if cancelTrans.UAType == UAS && sendrecv == SEND ||
+				cancelTrans.UAType == UAC && sendrecv == RECV {
+
+				delete(stack.transactions, tid)
+
+				stack.log.LogError("CANCEL direct is not same as Request")
+				return ERROR
 			}
 
 			if sendrecv == RECV {
@@ -510,6 +530,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
+		delete(stack.transactions, tid)
+
 		stack.log.LogError("process %s but trans exist", jsip.Name())
 		return ERROR
 	}
@@ -517,6 +539,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	// Response
 	if trans.UAType == UAS && sendrecv == RECV ||
 		trans.UAType == UAC && sendrecv == SEND {
+
+		delete(stack.transactions, tid)
 
 		stack.log.LogError("Response direct is same as Request direct")
 		return ERROR
@@ -526,6 +550,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 	if jsip.Code == 100 {
 		if trans.State > TRANS_TRYING {
+			delete(stack.transactions, tid)
+
 			stack.log.LogError("process 100 Trying but state is %d", trans.State)
 			return ERROR
 		}
@@ -537,6 +563,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 	if jsip.Code < 200 && jsip.Code > 100 {
 		if trans.State > TRANS_PR {
+			delete(stack.transactions, tid)
+
 			stack.log.LogError("process %s but state is %d", jsip.Name(),
 				trans.State)
 			return ERROR
@@ -548,6 +576,8 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if trans.State == TRANS_FINALRESP {
+		delete(stack.transactions, tid)
+
 		stack.log.LogError("process %s but state is %d", jsip.Name(),
 			trans.State)
 		return ERROR
@@ -555,21 +585,21 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 
 	trans.State = TRANS_FINALRESP
 
-	if trans.Type != INVITE {
+	if trans.Type != INVITE { // TODO test
 		delete(stack.transactions, tid)
 	} else {
-		if jsip.Code >= 300 && sendrecv == RECV {
+		if jsip.Code >= 300 && sendrecv == RECV { //TODO test
 			// Send Ack for INVITE 3XX 4XX 5XX 6XX Response
 			SendMsg(JSIPMsgAck(jsip))
 		}
 	}
 
-	if trans.Type == CANCEL && sendrecv == RECV {
+	if trans.Type == CANCEL && sendrecv == RECV { //TODO test
 		// Ignore CANCEL 200 received
 		return IGNORE
 	}
 
-	if trans.Type == BYE && sendrecv == RECV {
+	if trans.Type == BYE && sendrecv == RECV { //TODO test
 		// Ignore BYE 200 received
 		return IGNORE
 	}
@@ -602,6 +632,8 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 			return OK
 		case INVITE:
 			switch {
+			case jsip.Code == 100:
+				return OK
 			case jsip.Code < 200 && jsip.Code > 100:
 				session.State = INVITE_18X
 				return OK
@@ -701,12 +733,12 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 		}
 	case INVITE_ERR:
 		if jsip.Type == ACK { // ERR ACK
-			session.State = INVITE_TERM
+			session.State = INVITE_END
 			return IGNORE
 		}
 	case INVITE_END:
 		if jsip.Type == BYE && jsip.Code > 0 {
-			session.State = INVITE_TERM
+			session.State = INVITE_END
 			return OK
 		}
 	}
@@ -807,7 +839,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 	ret := session.handler(session, jsip, sendrecv)
 
 	if session.Type == INVITE {
-		if session.State == INVITE_TERM {
+		if session.State == INVITE_END {
 			delete(stack.sessions, jsip.DialogueID)
 		}
 	} else {
@@ -849,7 +881,7 @@ func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
 	}
 
 	// Transaction Layer
-	ret = stack.jsipTrasaction(jsip, SEND)
+	ret := stack.jsipTrasaction(jsip, SEND)
 	if ret == ERROR {
 		return
 	} else if ret == IGNORE {
@@ -859,7 +891,9 @@ func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
 	if jsip.Transaction.conn != nil {
 		jsip.conn = jsip.Transaction.conn
 	} else {
-		jsip.conn = jsip.Session.conn
+		if jsip.Session != nil {
+			jsip.conn = jsip.Session.conn
+		}
 	}
 
 	if jsip.conn == nil {
@@ -1034,7 +1068,7 @@ func JSIPMsgAck(resp *JSIP) *JSIP {
 		Session: resp.Session,
 	}
 
-	ack.RawMsg["RelatedID"] = resp.CSeq
+	ack.RawMsg["RelatedID"] = json.Number(strconv.Itoa(int(resp.CSeq)))
 
 	return ack
 }
@@ -1046,6 +1080,7 @@ func JSIPMsgBye(session *JSIPSession) *JSIP {
 		From:       session.req.From,
 		To:         session.req.To,
 		DialogueID: session.req.DialogueID,
+		RawMsg:     make(map[string]interface{}),
 
 		conn:    session.conn,
 		Session: session,
@@ -1061,6 +1096,7 @@ func JSIPMsgUpdate(session *JSIPSession) *JSIP {
 		From:       session.req.From,
 		To:         session.req.To,
 		DialogueID: session.req.DialogueID,
+		RawMsg:     make(map[string]interface{}),
 
 		conn:    session.conn,
 		Session: session,
@@ -1076,12 +1112,13 @@ func JSIPMsgCancel(trans *JSIPTrasaction) *JSIP {
 		From:       trans.req.From,
 		To:         trans.req.To,
 		DialogueID: trans.req.DialogueID,
+		RawMsg:     make(map[string]interface{}),
 
 		conn:    trans.conn,
 		Session: trans.req.Session,
 	}
 
-	cancel.RawMsg["RelatedID"] = trans.cseq
+	cancel.RawMsg["RelatedID"] = json.Number(strconv.Itoa(int(trans.cseq)))
 
 	return cancel
 }
