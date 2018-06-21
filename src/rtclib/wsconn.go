@@ -141,6 +141,22 @@ func (c *WSConn) loop() {
 	}
 }
 
+func (c *WSConn) dial() {
+	go func() {
+		c.connect()
+
+		for {
+			select {
+			case <-c.reconnect:
+				c.connect()
+			case <-c.quit:
+				c.conn.Close()
+				return
+			}
+		}
+	}()
+}
+
 // New a websocket Conn instance
 // 	name   : connection name
 // 	url    : client connection need url to connect,
@@ -178,24 +194,11 @@ func NewWSConn(name string, url string, uatype int, timeout time.Duration,
 	}
 	wsconns[name] = conn
 
+	if uatype == UAC {
+		conn.dial()
+	}
+
 	return conn
-}
-
-// Dial to remote websocket server
-func (c *WSConn) Dial() {
-	go func() {
-		c.connect()
-
-		for {
-			select {
-			case <-c.reconnect:
-				c.connect()
-			case <-c.quit:
-				c.conn.Close()
-				return
-			}
-		}
-	}()
 }
 
 // Accept remote websocket connection

@@ -13,9 +13,6 @@ type Size_t uint64
 
 // Base Conn type
 type Conn interface {
-	// Connect to server as client
-	Dial()
-
 	// Accept connection as server
 	Accept(data interface{})
 
