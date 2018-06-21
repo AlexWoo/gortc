@@ -152,6 +152,8 @@ func (t *rtcTest) process(conn *websocket.Conn) error {
 			case msg := <-msgchan:
 				timer.Stop()
 
+				fmt.Println(string(msg))
+
 				if msg == nil {
 					return errors.New("receive err msg")
 				}
@@ -169,7 +171,7 @@ func (t *rtcTest) process(conn *websocket.Conn) error {
 				em := stage.value.(map[string]interface{})
 				for k, v := range em {
 					if rm[k] != v {
-						return errors.New("para check error")
+						return fmt.Errorf("para %s check error %v %v", k, rm[k], v)
 					}
 				}
 			case <-timer.C:
