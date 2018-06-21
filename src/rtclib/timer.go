@@ -30,6 +30,8 @@ func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
 		case <-timer.quit:
 			timer.timer.Stop()
 		}
+
+		timer.timer = nil
 	}()
 
 	return timer
