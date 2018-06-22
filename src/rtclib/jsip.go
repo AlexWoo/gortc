@@ -534,7 +534,7 @@ type JSIPConfig struct {
 	Timeout      time.Duration `default:"1s"`
 	Qsize        Size_t        `default:"1k"`
 	TransTimer   time.Duration `default:"5s"`
-	InviteTimer  time.Duration `default:"60s"`
+	PRTimer      time.Duration `default:"60s"`
 	SessionLayer bool          `default:"true"`
 	SessionTimer time.Duration `default:"600s"`
 }
@@ -873,10 +873,6 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		return IGNORE
 	}
 
-	if trans.State < TRANS_PR {
-		trans.timer.Stop()
-	}
-
 	if jsip.Code < 200 && jsip.Code > 100 {
 		if trans.State > TRANS_PR {
 			stack.log.LogError("process %s but state is %d", jsip.Name(),
@@ -884,6 +880,7 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 			return IGNORE
 		}
 
+		trans.timer.Reset(stack.config.PRTimer)
 		trans.State = TRANS_PR
 
 		return OK
@@ -905,10 +902,11 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 				trans.delete()
 				return OK
 			}
-			// Send Ack for INVITE 3XX 4XX 5XX 6XX Response
+			// Send ACK for INVITE 3XX 4XX 5XX 6XX Response
 			SendMsg(JSIPMsgAck(jsip))
 		}
-		trans.timer = NewTimer(stack.config.TransTimer, trans.timerHandle, nil)
+		// Wait for ACK
+		trans.timer.Reset(stack.config.TransTimer)
 	}
 
 	if trans.Type == CANCEL && sendrecv == RECV {
@@ -942,9 +940,6 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 			session.State = INVITE_REQ
 			return OK
 		}
-		session.sessTimer = NewTimer(jstack.config.InviteTimer,
-			session.timerHandle, nil)
-
 	case INVITE_REQ:
 		switch jsip.Type {
 		case CANCEL:
@@ -958,11 +953,9 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				return OK
 			case jsip.Code == 200:
 				session.State = INVITE_200
-				session.sessTimer.Stop()
 				return OK
 			case jsip.Code >= 300:
 				session.State = INVITE_ERR
-				session.sessTimer.Stop()
 				return OK
 			}
 		}
@@ -1146,6 +1139,7 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 
 			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
 			session.State = DEFAULT_REQ
+
 			if sendrecv == RECV {
 				SendMsg(JSIPMsgRes(jsip, 481))
 			}
