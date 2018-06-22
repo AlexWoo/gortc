@@ -16,8 +16,10 @@ type Timer struct {
 }
 
 func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
+	t := time.NewTimer(d)
+
 	timer := &Timer{
-		timer:   time.NewTimer(d),
+		timer:   t,
 		quit:    make(chan bool),
 		handler: f,
 		data:    p,
@@ -25,10 +27,10 @@ func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
 
 	go func() {
 		select {
-		case <-timer.timer.C:
+		case <-t.C:
 			timer.handler(timer.data)
 		case <-timer.quit:
-			timer.timer.Stop()
+			t.Stop()
 		}
 
 		timer.timer = nil
@@ -39,10 +41,13 @@ func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
 
 func (t *Timer) Stop() {
 	if t.timer != nil {
+		t.timer = nil
 		t.quit <- true
 	}
 }
 
 func (t *Timer) Reset(d time.Duration) {
-	t.timer.Reset(d)
+	if t.timer != nil {
+		t.timer.Reset(d)
+	}
 }
