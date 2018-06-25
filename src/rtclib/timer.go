@@ -15,26 +15,33 @@ type Timer struct {
 	data    interface{}
 }
 
-func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
+func (timer *Timer) startTimer(d time.Duration) {
 	t := time.NewTimer(d)
-
-	timer := &Timer{
-		timer:   t,
-		quit:    make(chan bool),
-		handler: f,
-		data:    p,
-	}
 
 	go func() {
 		select {
 		case <-t.C:
-			timer.handler(timer.data)
+			if timer.handler != nil {
+				timer.handler(timer.data)
+			}
 		case <-timer.quit:
 			t.Stop()
 		}
 
 		timer.timer = nil
 	}()
+
+	timer.timer = t
+}
+
+func NewTimer(d time.Duration, f func(interface{}), p interface{}) *Timer {
+	timer := &Timer{
+		quit:    make(chan bool),
+		handler: f,
+		data:    p,
+	}
+
+	timer.startTimer(d)
 
 	return timer
 }
@@ -49,5 +56,7 @@ func (t *Timer) Stop() {
 func (t *Timer) Reset(d time.Duration) {
 	if t.timer != nil {
 		t.timer.Reset(d)
+	} else {
+		t.startTimer(d)
 	}
 }
