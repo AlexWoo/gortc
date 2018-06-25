@@ -127,6 +127,7 @@ const (
 	TRANS_TRYING
 	TRANS_PR
 	TRANS_FINALRESP
+	TRANS_ERRRESP
 )
 
 // SIP Session
@@ -162,6 +163,7 @@ const (
 	DEFAULT_INIT = iota
 	DEFAULT_REQ
 	DEFAULT_RESP
+	DEFAULT_CANCELLED
 )
 
 const (
@@ -798,6 +800,10 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			ackTrans.delete()
+
+			if trans.State == TRANS_ERRRESP && sendrecv == RECV {
+				return IGNORE
+			}
 		}
 
 		if jsip.Type == CANCEL {
@@ -840,10 +846,10 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 				if jsip.inner {
 					trans.delete()
 				} else {
-					SendMsg(JSIPMsgRes(jsip, 200))
+					stack.sendq_t <- JSIPMsgRes(jsip, 200)
 				}
 				// Send Req 487
-				SendMsg(JSIPMsgRes(cancelTrans.req, 487))
+				stack.sendq_t <- JSIPMsgRes(cancelTrans.req, 487)
 			}
 		}
 
@@ -906,7 +912,11 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 		return IGNORE
 	}
 
-	trans.State = TRANS_FINALRESP
+	if jsip.Code >= 300 {
+		trans.State = TRANS_ERRRESP
+	} else {
+		trans.State = TRANS_FINALRESP
+	}
 
 	if trans.Type != INVITE {
 		trans.delete()
@@ -945,7 +955,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 	}
 
 	if jsip.Type == CANCEL && jsip.Code > 0 {
-		return OK
+		return IGNORE
 	}
 
 	switch session.State {
@@ -1127,6 +1137,10 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 	sendrecv int) int {
 
+	if jsip.Type == CANCEL && jsip.Code > 0 {
+		return IGNORE
+	}
+
 	switch session.State {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
@@ -1135,7 +1149,20 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			return ERROR
 		}
 
-		if session.Type != INVITE && session.Type != REGISTER &&
+		if session.Type == CANCEL {
+			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
+			session.State = DEFAULT_RESP
+
+			resp := JSIPMsgRes(jsip, 481)
+			if sendrecv == RECV {
+				stack.sendq_t <- resp
+			} else {
+				fmt.Println("Recv:", resp.Abstract())
+				stack.jsipHandle(resp)
+			}
+
+			return ERROR
+		} else if session.Type != INVITE && session.Type != REGISTER &&
 			session.Type != OPTIONS && session.Type != MESSAGE &&
 			session.Type != SUBSCRIBE {
 
@@ -1154,12 +1181,12 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 		session.State = DEFAULT_REQ
 
 	case DEFAULT_REQ:
-		if jsip.Type == CANCEL {
-			if session.Type == CANCEL && jsip.Code >= 200 {
-				session.State = DEFAULT_RESP
+		if jsip.Code == 0 {
+			if jsip.Type == CANCEL {
+				session.State = DEFAULT_CANCELLED
+				return OK
 			}
-			return OK
-		} else if jsip.Code == 0 {
+
 			stack.log.LogError("Recv request %s but session state is DEFAULT_REQ",
 				jsip.Name())
 
@@ -1217,7 +1244,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 			session.delete()
 		}
 	} else {
-		if session.State == DEFAULT_RESP {
+		if session.State >= DEFAULT_RESP {
 			session.delete()
 		}
 	}
@@ -1227,6 +1254,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 
 func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
+	fmt.Println("Recv[Transaction]:", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1239,6 +1267,7 @@ func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 
 func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
+	fmt.Println("Recv[Session]:", jsip.Abstract())
 	ret := stack.jsipSession(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1252,6 +1281,7 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 
 func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
+	fmt.Println("Send[Session]:", jsip.Abstract())
 	ret := stack.jsipSession(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1264,6 +1294,7 @@ func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 
 func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
+	fmt.Println("Send[Transaction]:", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1300,9 +1331,9 @@ func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	}
 
 	jsip = stack.jsipParser(jsip)
-	fmt.Println("Send:", jsip.Abstract())
 
 	data, _ := json.Marshal(jsip.RawMsg)
+	fmt.Println("Send[Raw]", string(data))
 	jsip.conn.Send(data)
 }
 
@@ -1374,6 +1405,7 @@ func (stack *JSIPStack) Qsize() uint64 {
 }
 
 func RecvMsg(conn Conn, data []byte) {
+	fmt.Println("Recv[Raw]:", string(data))
 	jsip, err := jstack.jsipUnParser(data)
 	if err != nil {
 		fmt.Println("------- parse error", err)
@@ -1386,6 +1418,7 @@ func RecvMsg(conn Conn, data []byte) {
 }
 
 func SendMsg(jsip *JSIP) {
+	fmt.Println("Send:", jsip.Abstract())
 	jsip, err := jstack.jsipPrepared(jsip)
 	if err != nil {
 		fmt.Println("------- prepared error", err)
