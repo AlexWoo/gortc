@@ -286,23 +286,23 @@ func JSIPMsgUpdate(session *JSIPSession) *JSIP {
 	return update
 }
 
-func JSIPMsgCancel(trans *JSIPTrasaction) *JSIP {
+func JSIPMsgCancel(req *JSIP) *JSIP {
 	cancel := &JSIP{
 		Type:       CANCEL,
-		RequestURI: trans.req.RequestURI,
-		From:       trans.req.From,
-		To:         trans.req.To,
-		DialogueID: trans.req.DialogueID,
+		RequestURI: req.RequestURI,
+		From:       req.From,
+		To:         req.To,
+		DialogueID: req.DialogueID,
 		RawMsg:     make(map[string]interface{}),
 
-		conn:    trans.conn,
-		Session: trans.req.Session,
+		conn:    req.conn,
+		Session: req.Session,
 	}
 
-	cancel.RawMsg["RelatedID"] = json.Number(strconv.Itoa(int(trans.cseq)))
+	cancel.RawMsg["RelatedID"] = json.Number(strconv.Itoa(int(req.CSeq)))
 
-	if trans.req.Session == nil {
-		cancel.CSeq = trans.cseq + 1
+	if req.Session == nil {
+		cancel.CSeq = req.CSeq + 1
 	}
 
 	return cancel
@@ -406,17 +406,17 @@ func (trans *JSIPTrasaction) timeout() {
 	}
 
 	if trans.UAType == UAS {
-		cancel := JSIPMsgCancel(trans)
+		cancel := JSIPMsgCancel(trans.req)
 		cancel.inner = true
 		if cancel.Session != nil {
 			cancel.Session.cseq++
 			cancel.CSeq = cancel.Session.cseq
 		}
-		jstack.recvq <- cancel
+		jstack.recvq_t <- cancel
 	} else {
 		resp := JSIPMsgRes(trans.req, 408)
 		resp.inner = true
-		jstack.recvq <- resp
+		jstack.recvq_t <- resp
 	}
 }
 
@@ -429,6 +429,7 @@ type JSIPSession struct {
 	cseq    uint64
 	handler func(session *JSIPSession, jsip *JSIP, sendrecv int) int
 
+	expire    time.Duration
 	sessTimer *Timer
 	err       bool
 
@@ -455,6 +456,19 @@ func newJSIPSess(jsip *JSIP, sendrecv int) *JSIPSession {
 	switch session.Type {
 	case INVITE:
 		session.handler = jstack.jsipInviteSession
+
+		exp, ok := jsip.RawMsg["Expire"]
+		expire := jstack.config.SessionTimer
+		if ok {
+			tmp, _ := strconv.ParseInt(string(exp.(json.Number)), 10, 64)
+			expire = time.Duration(tmp) * time.Second
+		}
+
+		if session.UAType == UAS {
+			session.expire = expire
+		} else {
+			session.expire = expire/2 - jstack.config.Timeout
+		}
 	default:
 		session.handler = jstack.jsipDefaultSession
 	}
@@ -463,7 +477,9 @@ func newJSIPSess(jsip *JSIP, sendrecv int) *JSIPSession {
 }
 
 func (sess *JSIPSession) delete() {
-	sess.sessTimer.Stop()
+	if sess.sessTimer != nil {
+		sess.sessTimer.Stop()
+	}
 
 	delete(jstack.sessions, sess.dlg)
 }
@@ -479,34 +495,26 @@ func (sess *JSIPSession) errorHandle() {
 
 	if sess.State >= INVITE_200 {
 		// Send BYE to application layer
-		byeInner := JSIPMsgBye(sess)
-		fmt.Println("Recv:", byeInner.Abstract())
-		jstack.jsipHandle(byeInner)
-
-		// Send BYE to session layer
-		byeOutter := JSIPMsgBye(sess)
-		SendMsg(byeOutter)
+		bye := JSIPMsgBye(sess)
+		bye.inner = true
+		sess.cseq++
+		bye.CSeq = sess.cseq
+		jstack.recvq_t <- bye
 	}
 
 	// sess.State < INVITE_200
 	if sess.UAType == UAS {
 		// Send CANCEL to application layer
-		cancel := JSIPMsgCancel(sess.req.Transaction)
-		fmt.Println("Recv:", cancel.Abstract())
-		jstack.jsipHandle(cancel)
-
-		// Send INVITE_408 to session layer
-		resp := JSIPMsgRes(sess.req, 408)
-		SendMsg(resp)
+		cancel := JSIPMsgCancel(sess.req)
+		cancel.inner = true
+		sess.cseq++
+		cancel.CSeq = sess.cseq
+		jstack.recvq_t <- cancel
 	} else {
 		// Send INVITE_408 to application layer
 		resp := JSIPMsgRes(sess.req, 408)
-		fmt.Println("Recv:", resp.Abstract())
-		jstack.jsipHandle(resp)
-
-		// Send CANCEL to session layer
-		cancel := JSIPMsgCancel(sess.req.Transaction)
-		SendMsg(cancel)
+		resp.inner = true
+		jstack.recvq_t <- resp
 	}
 }
 
@@ -544,8 +552,10 @@ type JSIPStack struct {
 	jsipHandle func(jsip *JSIP)
 	log        *Log
 
-	recvq        chan *JSIP
-	sendq        chan *JSIP
+	recvq_t      chan *JSIP
+	sendq_t      chan *JSIP
+	recvq_s      chan *JSIP
+	sendq_s      chan *JSIP
 	transTimeout chan *JSIPTrasaction
 	sessTimeout  chan *JSIPSession
 
@@ -745,7 +755,7 @@ func (stack *JSIPStack) jsipPrepared(jsip *JSIP) (*JSIP, error) {
 }
 
 // Transaction Layer
-func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
+func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	tid := stack.transactionID(jsip, jsip.CSeq)
 	trans := stack.transactions[tid]
 	jsip.Transaction = trans
@@ -840,7 +850,11 @@ func (stack *JSIPStack) jsipTrasaction(jsip *JSIP, sendrecv int) int {
 		if jsip.Type == BYE {
 			if sendrecv == RECV {
 				// Send BYE 200
-				SendMsg(JSIPMsgRes(jsip, 200))
+				if jsip.inner {
+					trans.delete()
+				} else {
+					SendMsg(JSIPMsgRes(jsip, 200))
+				}
 			}
 		}
 
@@ -998,14 +1012,8 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 	case INVITE_200:
 		if jsip.Type == ACK {
 			session.State = INVITE_ACK
-			if session.UAType == UAS {
-				session.sessTimer = NewTimer(jstack.config.SessionTimer,
-					session.timerHandle, nil)
-			} else {
-				session.sessTimer = NewTimer(
-					jstack.config.SessionTimer/2-jstack.config.Timeout,
-					session.timerHandle, nil)
-			}
+			session.sessTimer = NewTimer(session.expire,
+				session.timerHandle, nil)
 			return OK
 		} else if jsip.Type == BYE {
 			session.State = INVITE_END
@@ -1022,7 +1030,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 			if jsip.Code == 0 {
 				if sendrecv == RECV {
 					SendMsg(JSIPMsgRes(jsip, 200))
-					session.sessTimer.Reset(jstack.config.SessionTimer)
+					session.sessTimer.Reset(session.expire)
 				}
 				return IGNORE
 			}
@@ -1031,8 +1039,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				if sendrecv == SEND {
 					return OK
 				} else {
-					session.sessTimer.Reset(jstack.config.SessionTimer/2 -
-						jstack.config.Timeout)
+					session.sessTimer.Reset(session.expire)
 					session.err = false
 					return IGNORE
 				}
@@ -1056,8 +1063,9 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 			if jsip.Code == 0 {
 				if sendrecv == RECV {
 					SendMsg(JSIPMsgRes(jsip, 200))
-					session.sessTimer.Reset(jstack.config.SessionTimer)
+					session.sessTimer.Reset(session.expire)
 				}
+
 				return IGNORE
 			}
 
@@ -1065,8 +1073,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				if sendrecv == SEND {
 					return OK
 				} else {
-					session.sessTimer.Reset(jstack.config.SessionTimer/2 -
-						jstack.config.Timeout)
+					session.sessTimer.Reset(session.expire)
 					session.err = false
 					return IGNORE
 				}
@@ -1084,7 +1091,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 			if jsip.Code == 0 {
 				if sendrecv == RECV {
 					SendMsg(JSIPMsgRes(jsip, 200))
-					session.sessTimer.Reset(jstack.config.SessionTimer)
+					session.sessTimer.Reset(session.expire)
 				}
 				return IGNORE
 			}
@@ -1093,8 +1100,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				if sendrecv == SEND {
 					return OK
 				} else {
-					session.sessTimer.Reset(jstack.config.SessionTimer/2 -
-						jstack.config.Timeout)
+					session.sessTimer.Reset(session.expire)
 					session.err = false
 					return IGNORE
 				}
@@ -1121,10 +1127,6 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 	sendrecv int) int {
 
-	if jsip.Type == CANCEL {
-		return OK
-	}
-
 	switch session.State {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
@@ -1140,8 +1142,11 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
 			session.State = DEFAULT_REQ
 
+			resp := JSIPMsgRes(jsip, 481)
 			if sendrecv == RECV {
-				SendMsg(JSIPMsgRes(jsip, 481))
+				stack.sendq_s <- resp
+			} else {
+				stack.recvq_s <- resp
 			}
 			return ERROR
 		}
@@ -1149,13 +1154,26 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 		session.State = DEFAULT_REQ
 
 	case DEFAULT_REQ:
-		if jsip.Code == 0 {
+		if jsip.Type == CANCEL {
+			if session.Type == CANCEL && jsip.Code >= 200 {
+				session.State = DEFAULT_RESP
+			}
+			return OK
+		} else if jsip.Code == 0 {
 			stack.log.LogError("Recv request %s but session state is DEFAULT_REQ",
 				jsip.Name())
+
+			resp := JSIPMsgRes(jsip, 400)
+			if sendrecv == RECV {
+				stack.sendq_t <- resp
+			} else {
+				stack.recvq_s <- resp
+			}
+
 			return ERROR
 		}
 
-		if jsip.Code >= 200 {
+		if jsip.Code >= 200 && session.req.CSeq == jsip.CSeq {
 			session.State = DEFAULT_RESP
 		}
 	}
@@ -1207,17 +1225,21 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 	return ret
 }
 
-func (stack *JSIPStack) recvJSIPMsg(jsip *JSIP) {
+func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	ret := stack.jsipTrasaction(jsip, RECV)
+	ret := stack.jsipTransaction(jsip, RECV)
 	if ret == ERROR {
 		return
 	} else if ret == IGNORE {
 		return
 	}
 
+	stack.recvq_s <- jsip
+}
+
+func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
-	ret = stack.jsipSession(jsip, RECV)
+	ret := stack.jsipSession(jsip, RECV)
 	if ret == ERROR {
 		return
 	} else if ret == IGNORE {
@@ -1228,7 +1250,7 @@ func (stack *JSIPStack) recvJSIPMsg(jsip *JSIP) {
 	stack.jsipHandle(jsip)
 }
 
-func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
+func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
 	ret := stack.jsipSession(jsip, SEND)
 	if ret == ERROR {
@@ -1237,8 +1259,12 @@ func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
 		return
 	}
 
+	stack.sendq_t <- jsip
+}
+
+func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	ret = stack.jsipTrasaction(jsip, SEND)
+	ret := stack.jsipTransaction(jsip, SEND)
 	if ret == ERROR {
 		return
 	} else if ret == IGNORE {
@@ -1283,10 +1309,14 @@ func (stack *JSIPStack) sendJSIPMsg(jsip *JSIP) {
 func (stack *JSIPStack) run() {
 	for {
 		select {
-		case jsip := <-stack.recvq:
-			stack.recvJSIPMsg(jsip)
-		case jsip := <-stack.sendq:
-			stack.sendJSIPMsg(jsip)
+		case jsip := <-stack.recvq_t:
+			stack.recvJSIPMsg_t(jsip)
+		case jsip := <-stack.sendq_t:
+			stack.sendJSIPMsg_t(jsip)
+		case jsip := <-stack.recvq_s:
+			stack.recvJSIPMsg_s(jsip)
+		case jsip := <-stack.sendq_s:
+			stack.sendJSIPMsg_s(jsip)
 		case trans := <-stack.transTimeout:
 			trans.timeout()
 		case sess := <-stack.sessTimeout:
@@ -1314,8 +1344,10 @@ func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
 		return nil
 	}
 
-	jstack.recvq = make(chan *JSIP, jstack.Qsize())
-	jstack.sendq = make(chan *JSIP, jstack.Qsize())
+	jstack.recvq_t = make(chan *JSIP, jstack.Qsize())
+	jstack.sendq_t = make(chan *JSIP, jstack.Qsize())
+	jstack.recvq_s = make(chan *JSIP, jstack.Qsize())
+	jstack.sendq_s = make(chan *JSIP, jstack.Qsize())
 	jstack.transTimeout = make(chan *JSIPTrasaction)
 	jstack.sessTimeout = make(chan *JSIPSession)
 
@@ -1350,7 +1382,7 @@ func RecvMsg(conn Conn, data []byte) {
 
 	jsip.conn = conn
 
-	jstack.recvq <- jsip
+	jstack.recvq_t <- jsip
 }
 
 func SendMsg(jsip *JSIP) {
@@ -1360,5 +1392,5 @@ func SendMsg(jsip *JSIP) {
 		return
 	}
 
-	jstack.sendq <- jsip
+	jstack.sendq_s <- jsip
 }
