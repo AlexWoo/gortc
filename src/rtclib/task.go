@@ -5,6 +5,7 @@
 package rtclib
 
 import (
+	"fmt"
 	"sync"
 
 	uuid "github.com/satori/go.uuid"
@@ -15,7 +16,11 @@ type SlpCtx struct {
 }
 
 type SLP interface {
+	// Task start in normal stage, msg process interface
 	Process(jsip *JSIP)
+
+	// Task start in SLP loaded in gortc, msg process interface
+	OnLoad(jsip *JSIP)
 }
 
 type Task struct {
@@ -26,6 +31,8 @@ type Task struct {
 	lock sync.Mutex
 	msgs chan *JSIP
 	quit bool
+
+	Process func(jsip *JSIP)
 }
 
 var tasks = make(map[string]*Task)
@@ -54,18 +61,22 @@ func (t *Task) DelTask() {
 	defer taskRWLock.Unlock()
 
 	for _, dlg := range t.dlgs {
-		//JsessDel(dlg) TODO
 		delete(tasks, dlg)
 	}
 }
 
 func (t *Task) run() {
-	defer t.DelTask()
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("task process err", err)
+		}
+		t.DelTask()
+	}()
 
 	for {
 		select {
 		case msg := <-t.msgs:
-			t.SLP.Process(msg)
+			t.Process(msg)
 		}
 
 		if t.quit {
@@ -78,7 +89,7 @@ func (t *Task) SetFinished() {
 	t.quit = true
 }
 
-func (t *Task) Process(jsip *JSIP) {
+func (t *Task) OnMsg(jsip *JSIP) {
 	t.msgs <- jsip
 }
 
@@ -94,13 +105,15 @@ func NewTask(dlg string) *Task {
 		msgs: make(chan *JSIP, 32),
 	}
 
-	t.lock.Lock()
-	t.dlgs = append(t.dlgs, dlg)
-	t.lock.Unlock()
+	if dlg != "" {
+		t.lock.Lock()
+		t.dlgs = append(t.dlgs, dlg)
+		t.lock.Unlock()
 
-	taskRWLock.Lock()
-	tasks[dlg] = t
-	taskRWLock.Unlock()
+		taskRWLock.Lock()
+		tasks[dlg] = t
+		taskRWLock.Unlock()
+	}
 
 	go t.run()
 

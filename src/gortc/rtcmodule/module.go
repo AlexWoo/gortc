@@ -36,7 +36,7 @@ func process(jsip *rtclib.JSIP) {
 	dlg := jsip.DialogueID
 	t := rtclib.GetTask(dlg)
 	if t != nil {
-		t.Process(jsip)
+		t.OnMsg(jsip)
 		return
 	}
 
@@ -58,15 +58,14 @@ func process(jsip *rtclib.JSIP) {
 
 	t = rtclib.NewTask(dlg)
 	t.Name = slpname
-	slp := getSLP(t)
-	if slp == nil {
+	getSLP(t, SLPPROCESS)
+	if t.SLP == nil {
 		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
 		t.DelTask()
 		return
 	}
 
-	t.SLP = slp
-	t.Process(jsip)
+	t.OnMsg(jsip)
 }
 
 func NewRTCModule() *RTCModule {
