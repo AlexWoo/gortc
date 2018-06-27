@@ -11,22 +11,21 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-type SlpCtx struct {
-	Body interface{}
-}
-
 type SLP interface {
 	// Task start in normal stage, msg process interface
 	Process(jsip *JSIP)
 
 	// Task start in SLP loaded in gortc, msg process interface
 	OnLoad(jsip *JSIP)
+
+	// Create SLP ctx
+	NewSLPCtx() interface{}
 }
 
 type Task struct {
 	Name string
 	SLP  SLP
-	Ctx  *SlpCtx
+	ctx  interface{}
 	dlgs []string
 	lock sync.Mutex
 	msgs chan *JSIP
@@ -51,6 +50,14 @@ func (t *Task) NewDialogueID() string {
 	taskRWLock.Unlock()
 
 	return dlg
+}
+
+func (t *Task) GetCtx() interface{} {
+	return t.ctx
+}
+
+func (t *Task) SetCtx(ctx interface{}) {
+	t.ctx = ctx
 }
 
 func (t *Task) DelTask() {
