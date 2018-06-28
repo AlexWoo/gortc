@@ -1404,6 +1404,10 @@ func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
 }
 
 // JStack Config
+func Realm() string {
+	return jstack.config.Realm
+}
+
 func (stack *JSIPStack) Location() string {
 	return stack.config.Location
 }
