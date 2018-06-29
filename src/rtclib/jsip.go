@@ -592,6 +592,7 @@ type JSIPConfig struct {
 }
 
 type JSIPStack struct {
+	confPath   string
 	config     *JSIPConfig
 	jsipHandle func(jsip *JSIP)
 	log        *Log
@@ -612,11 +613,10 @@ var jstack *JSIPStack
 func (stack *JSIPStack) loadConfig() bool {
 	stack.config = new(JSIPConfig)
 
-	confPath := RTCPATH + "/conf/gortc.ini"
-
-	f, err := ini.Load(confPath)
+	f, err := ini.Load(stack.confPath)
 	if err != nil {
-		jstack.log.LogError("Load config file %s error: %v", confPath, err)
+		jstack.log.LogError("Load config file %s error: %v",
+			stack.confPath, err)
 		return false
 	}
 
@@ -1374,8 +1374,9 @@ func (stack *JSIPStack) run() {
 }
 
 // Init JSIP Stack
-func InitJSIPStack(h func(jsip *JSIP), log *Log) *JSIPStack {
+func InitJSIPStack(h func(jsip *JSIP), log *Log, rtcpath string) *JSIPStack {
 	jstack = &JSIPStack{
+		confPath:     rtcpath + "/conf/gortc.ini",
 		jsipHandle:   h,
 		log:          log,
 		sessions:     make(map[string]*JSIPSession),

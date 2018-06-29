@@ -127,7 +127,7 @@ func (m *RTCModule) Init() bool {
 		return false
 	}
 
-	m.jstack = rtclib.InitJSIPStack(process, log)
+	m.jstack = rtclib.InitJSIPStack(process, log, rtclib.RTCPATH)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false

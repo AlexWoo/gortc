@@ -1,15 +1,21 @@
-if [ $# -ne 2 ];then
-    echo "Usage: $1 plugin_name $2 plugin_path"
+if [ $# -ne 1 ];then
+    echo "Usage: $1 plugin_name"
     exit 1
 fi
-
-rtcpath=/usr/local/gortc
 
 CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
 export GOPATH="$CURDIR"
 
-echo "slpcompile $rtcpath/slp/$1.so $2/$1.go"
-go build -ldflags "-pluginpath=$2" -buildmode=plugin -o $rtcpath/slp/$1.so $2/*.go
+echo $GOPATH
+
+rtcpath=/usr/local/gortc
+pluginpath=./
+
+cd src/$1
+go get
+
+echo "go build -buildmode=plugin -o $rtcpath/slp/$1.so"
+go build -buildmode=plugin -o $rtcpath/slp/$1.so
 
 export GOPATH="$OLDGOPATH"
