@@ -15,13 +15,18 @@ import (
 	simplejson "github.com/bitly/go-simplejson"
 )
 
+const (
+	SLPONLOAD = iota
+	SLPPROCESS
+)
+
 type slpPlugin struct {
 	name     string
 	used     uint64
 	using    uint64
 	file     string
 	time     time.Time
-	ctx      *rtclib.SlpCtx
+	ctx      interface{}
 	instance func(task *rtclib.Task) rtclib.SLP
 }
 
@@ -38,7 +43,11 @@ var slpm = &SLPM{
 }
 
 func slpLoad(name string, slpFile string) bool {
-	slp := &slpPlugin{name: name, file: slpFile}
+	slp := &slpPlugin{
+		name: name,
+		file: slpFile,
+		time: time.Now(),
+	}
 	path := slpm.slpdir + slpFile
 
 	p, err := plugin.Open(path)
@@ -63,10 +72,18 @@ func slpLoad(name string, slpFile string) bool {
 		}
 	}()
 
-	slp.ctx = new(rtclib.SlpCtx)
 	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
-	slp.time = time.Now()
 	slpm.slps[name] = slp
+
+	// SLP Init Process when loaded
+	t := rtclib.NewTask("")
+	t.Name = name
+	getSLP(t, SLPONLOAD)
+	if t.SLP == nil {
+		return false
+	}
+
+	t.OnMsg(nil)
 
 	return true
 }
@@ -163,16 +180,29 @@ func delSLP(name string) string {
 	return fmt.Sprintf("Delete SLP %s successd\n", name)
 }
 
-func getSLP(t *rtclib.Task) rtclib.SLP {
+func getSLP(t *rtclib.Task, stage int) {
 	p := slpm.slps[t.Name]
 	if p == nil {
 		LogError("SLP %s not exist", t.Name)
-		return nil
+		return
 	}
 	p.using++
 
-	t.Ctx = p.ctx
-	return p.instance(t)
+	t.SLP = p.instance(t)
+	if t.SLP == nil {
+		LogError("get slp error")
+		return
+	}
+
+	switch stage {
+	case SLPONLOAD:
+		t.Process = t.SLP.OnLoad
+		p.ctx = t.SLP.NewSLPCtx()
+	case SLPPROCESS:
+		t.Process = t.SLP.Process
+	}
+
+	t.SetCtx(p.ctx)
 }
 
 func endSLP(t *rtclib.Task) {
