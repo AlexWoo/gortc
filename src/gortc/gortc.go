@@ -119,6 +119,7 @@ func main() {
 
 	LogInfo("gortc init modules ...")
 	rtclib.InitModule(rtclog, rtclib.RTCPATH)
+	apimodule.AddInternalAPI("runtime.v1", RunTimeV1)
 
 	LogInfo("gortc init successd, start Running ...")
 
