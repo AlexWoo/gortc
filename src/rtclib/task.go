@@ -23,13 +23,14 @@ type SLP interface {
 }
 
 type Task struct {
-	Name string
-	SLP  SLP
-	ctx  interface{}
-	dlgs []string
-	lock sync.Mutex
-	msgs chan *JSIP
-	quit bool
+	Name  string
+	SLP   SLP
+	ctx   interface{}
+	dlgs  []string
+	msgs  chan *JSIP
+	taskq chan *Task
+	quitC chan bool
+	quit  bool
 
 	Process func(jsip *JSIP)
 }
@@ -41,13 +42,11 @@ func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV4()
 	dlg := jstack.config.Realm + u1.String()
 
-	t.lock.Lock()
-	t.dlgs = append(t.dlgs, dlg)
-	t.lock.Unlock()
-
 	taskRWLock.Lock()
+	defer taskRWLock.Unlock()
+
+	t.dlgs = append(t.dlgs, dlg)
 	tasks[dlg] = t
-	taskRWLock.Unlock()
 
 	return dlg
 }
@@ -61,9 +60,6 @@ func (t *Task) SetCtx(ctx interface{}) {
 }
 
 func (t *Task) DelTask() {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	taskRWLock.Lock()
 	defer taskRWLock.Unlock()
 
@@ -76,17 +72,19 @@ func (t *Task) run() {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("task process err", err)
+			t.taskq <- t
+			<-t.quitC
 		}
-		t.DelTask()
 	}()
 
 	for {
 		select {
 		case msg := <-t.msgs:
 			t.Process(msg)
-		}
-
-		if t.quit {
+			if t.quit {
+				t.taskq <- t
+			}
+		case <-t.quitC:
 			return
 		}
 	}
@@ -107,17 +105,16 @@ func GetTask(dlg string) *Task {
 	return tasks[dlg]
 }
 
-func NewTask(dlg string) *Task {
+func NewTask(dlg string, taskq chan *Task) *Task {
 	t := &Task{
-		msgs: make(chan *JSIP, 32),
+		msgs:  make(chan *JSIP, 1024),
+		taskq: taskq,
+		quitC: make(chan bool, 1),
 	}
 
 	if dlg != "" {
-		t.lock.Lock()
-		t.dlgs = append(t.dlgs, dlg)
-		t.lock.Unlock()
-
 		taskRWLock.Lock()
+		t.dlgs = append(t.dlgs, dlg)
 		tasks[dlg] = t
 		taskRWLock.Unlock()
 	}
