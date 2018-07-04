@@ -592,10 +592,10 @@ type JSIPConfig struct {
 }
 
 type JSIPStack struct {
-	confPath   string
-	config     *JSIPConfig
-	jsipHandle func(jsip *JSIP)
-	log        *Log
+	confPath string
+	config   *JSIPConfig
+	jsipC    chan *JSIP
+	log      *Log
 
 	recvq_t      chan *JSIP
 	sendq_t      chan *JSIP
@@ -1175,7 +1175,7 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 				stack.sendq_t <- resp
 			} else {
 				fmt.Println("Recv:", resp.Abstract())
-				stack.jsipHandle(resp)
+				stack.jsipC <- resp
 			}
 
 			return ERROR
@@ -1190,7 +1190,7 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			if sendrecv == RECV {
 				stack.sendq_s <- resp
 			} else {
-				stack.recvq_s <- resp
+				stack.jsipC <- resp
 			}
 			return ERROR
 		}
@@ -1293,7 +1293,7 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	}
 
 	fmt.Println("Recv:", jsip.Abstract())
-	stack.jsipHandle(jsip)
+	stack.jsipC <- jsip
 }
 
 func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
@@ -1374,10 +1374,10 @@ func (stack *JSIPStack) run() {
 }
 
 // Init JSIP Stack
-func InitJSIPStack(h func(jsip *JSIP), log *Log, rtcpath string) *JSIPStack {
+func InitJSIPStack(jsipC chan *JSIP, log *Log, rtcpath string) *JSIPStack {
 	jstack = &JSIPStack{
 		confPath:     rtcpath + "/conf/gortc.ini",
-		jsipHandle:   h,
+		jsipC:        jsipC,
 		log:          log,
 		sessions:     make(map[string]*JSIPSession),
 		transactions: make(map[string]*JSIPTrasaction),

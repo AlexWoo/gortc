@@ -1,16 +1,67 @@
 [
 
 {
-    "type": "send",
+    "type": "recv",
     "value": {
-        "Type": "SUBSCRIBE",
+        "Type": "INVITE",
         "Request-URI": "room:test1@test.com",
         "From": "Alex@test.com",
         "To": "Alex@test.com",
-        "DialogueID": "abcdefgh",
-        "CSeq": 1,
-        "Router": "a.test.com;type=slpdemo, b.test.com",
-        "Body": "aaaa"
+        "DialogueID": "xxx",
+        "CSeq": 1
+    }
+},
+
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@test.com",
+        "To":"Alex@test.com",
+        "DialogueID": "xxx",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "ACK",
+        "CSeq": 2
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "UPDATE",
+        "CSeq": 3
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@test.com",
+        "To":"Alex@test.com",
+        "DialogueID": "xxx",
+        "CSeq": 3
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "BYE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To":"Alex@test.com",
+        "DialogueID": "xxx",
+        "CSeq": 4
     }
 },
 
@@ -18,7 +69,8 @@
     "type": "recv",
     "value": {
         "Type": "RESPONSE",
-        "Code": 200
+        "Code": 200,
+        "CSeq": 4
     }
 }
 

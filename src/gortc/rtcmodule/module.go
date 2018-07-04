@@ -27,46 +27,13 @@ type RTCModule struct {
 	config    *RTCModuleConfig
 	server    *http.Server
 	tlsServer *http.Server
-	jstack    *rtclib.JSIPStack
+
+	jsipC  chan *rtclib.JSIP
+	taskQ  chan *rtclib.Task
+	jstack *rtclib.JSIPStack
 }
 
 var module *RTCModule
-
-func process(jsip *rtclib.JSIP) {
-	dlg := jsip.DialogueID
-	t := rtclib.GetTask(dlg)
-	if t != nil {
-		t.OnMsg(jsip)
-		return
-	}
-
-	slpname := "default"
-
-	if len(jsip.Router) != 0 {
-		router0 := jsip.Router[0]
-		paras := strings.Split(router0, ";")[1:]
-
-		for _, para := range paras {
-			if strings.HasPrefix(para, "type=") {
-				ss := strings.SplitN(para, "=", 2)
-				if ss[1] != "" {
-					slpname = ss[1]
-				}
-			}
-		}
-	}
-
-	t = rtclib.NewTask(dlg)
-	t.Name = slpname
-	getSLP(t, SLPPROCESS)
-	if t.SLP == nil {
-		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
-		t.DelTask()
-		return
-	}
-
-	t.OnMsg(jsip)
-}
 
 func NewRTCModule() *RTCModule {
 	module = &RTCModule{}
@@ -127,7 +94,10 @@ func (m *RTCModule) Init() bool {
 		return false
 	}
 
-	m.jstack = rtclib.InitJSIPStack(process, log, rtclib.RTCPATH)
+	m.jsipC = make(chan *rtclib.JSIP, 4096)
+	m.taskQ = make(chan *rtclib.Task, 1024)
+
+	m.jstack = rtclib.InitJSIPStack(m.jsipC, log, rtclib.RTCPATH)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false
@@ -169,6 +139,66 @@ func (m *RTCModule) Init() bool {
 	return true
 }
 
+func (m *RTCModule) processMsg(jsip *rtclib.JSIP) {
+	dlg := jsip.DialogueID
+	t := rtclib.GetTask(dlg)
+	if t != nil {
+		t.OnMsg(jsip)
+		return
+	}
+
+	if jsip.Code > 0 {
+		LogError("Receive %s but SLP if finished", jsip.Name())
+		return
+	}
+
+	if jsip.Type != rtclib.INVITE && jsip.Type != rtclib.REGISTER &&
+		jsip.Type != rtclib.OPTIONS && jsip.Type != rtclib.MESSAGE &&
+		jsip.Type != rtclib.SUBSCRIBE {
+
+		LogError("Receive %s but SLP if finished", jsip.Name())
+		return
+	}
+
+	slpname := "default"
+
+	if len(jsip.Router) != 0 {
+		router0 := jsip.Router[0]
+		paras := strings.Split(router0, ";")[1:]
+
+		for _, para := range paras {
+			if strings.HasPrefix(para, "type=") {
+				ss := strings.SplitN(para, "=", 2)
+				if ss[1] != "" {
+					slpname = ss[1]
+				}
+			}
+		}
+	}
+
+	t = rtclib.NewTask(dlg, m.taskQ)
+	t.Name = slpname
+	getSLP(t, SLPPROCESS)
+	if t.SLP == nil {
+		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
+		t.DelTask()
+		return
+	}
+
+	t.OnMsg(jsip)
+}
+
+func (m *RTCModule) process() {
+	for {
+		select {
+		case jsip := <-m.jsipC:
+			m.processMsg(jsip)
+		case task := <-m.taskQ:
+			task.DelTask()
+		}
+	}
+}
+
 func (m *RTCModule) Run() {
 	wait := 0
 	if m.server != nil {
@@ -197,6 +227,8 @@ func (m *RTCModule) Run() {
 			quit <- true
 		}()
 	}
+
+	go m.process()
 
 	for {
 		<-quit
