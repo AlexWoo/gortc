@@ -214,7 +214,7 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 
 func JSIPMsgRes(req *JSIP, code int) *JSIP {
 	if req.Code != 0 {
-		fmt.Println("Cannot send response for response")
+		jstack.log.LogError("Cannot send response for response")
 		return nil
 	}
 
@@ -1174,7 +1174,7 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			if sendrecv == RECV {
 				stack.sendq_t <- resp
 			} else {
-				fmt.Println("Recv:", resp.Abstract())
+				stack.log.LogDebug("Recv: %s", resp.Abstract())
 				stack.jsipC <- resp
 			}
 
@@ -1271,7 +1271,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 
 func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	fmt.Println("Recv[Transaction]:", jsip.Abstract())
+	stack.log.LogDebug("Recv[Transaction]: %s", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1284,7 +1284,7 @@ func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 
 func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
-	fmt.Println("Recv[Session]:", jsip.Abstract())
+	stack.log.LogDebug("Recv[Session]: %s", jsip.Abstract())
 	ret := stack.jsipSession(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1292,13 +1292,13 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 		return
 	}
 
-	fmt.Println("Recv:", jsip.Abstract())
+	stack.log.LogDebug("Recv: %s", jsip.Abstract())
 	stack.jsipC <- jsip
 }
 
 func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
-	fmt.Println("Send[Session]:", jsip.Abstract())
+	stack.log.LogDebug("Send[Session]: %s", jsip.Abstract())
 	ret := stack.jsipSession(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1311,7 +1311,7 @@ func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 
 func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	fmt.Println("Send[Transaction]:", jsip.Abstract())
+	stack.log.LogDebug("Send[Transaction]: %s", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1350,7 +1350,7 @@ func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	jsip = stack.jsipParser(jsip)
 
 	data, _ := json.Marshal(jsip.RawMsg)
-	fmt.Println("Send[Raw]", string(data))
+	stack.log.LogDebug("Send[Raw] %s", string(data))
 	jsip.conn.Send(data)
 }
 
@@ -1426,10 +1426,10 @@ func (stack *JSIPStack) Qsize() uint64 {
 }
 
 func RecvMsg(conn Conn, data []byte) {
-	fmt.Println("Recv[Raw]:", string(data))
+	jstack.log.LogDebug("Recv[Raw]: %s", string(data))
 	jsip, err := jstack.jsipUnParser(data)
 	if err != nil {
-		fmt.Println("------- parse error", err)
+		jstack.log.LogError("jsipUnParser err %s", err)
 		return
 	}
 
@@ -1439,10 +1439,10 @@ func RecvMsg(conn Conn, data []byte) {
 }
 
 func SendMsg(jsip *JSIP) {
-	fmt.Println("Send:", jsip.Abstract())
+	jstack.log.LogDebug("Send: %s", jsip.Abstract())
 	jsip, err := jstack.jsipPrepared(jsip)
 	if err != nil {
-		fmt.Println("------- prepared error", err)
+		jstack.log.LogError("jsipPrepared err %s", err)
 		return
 	}
 
