@@ -1,4 +1,4 @@
-buildlist="gortc rtest"
+buildlist="gortc"
 
 CURDIR=`pwd`
 OLDGOPATH="$GOPATH"
