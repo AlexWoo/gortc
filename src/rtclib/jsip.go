@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	simplejson "github.com/bitly/go-simplejson"
 	"github.com/go-ini/ini"
+	"github.com/tidwall/gjson"
 )
 
 // return value
@@ -186,7 +186,7 @@ type JSIP struct {
 	CSeq       uint64
 	DialogueID string
 	Router     []string
-	Body       interface{}
+	Body       string
 	RawMsg     map[string]interface{}
 
 	inner       bool
@@ -356,32 +356,16 @@ func (jsip *JSIP) Detail() string {
 }
 
 func (jsip *JSIP) GetInt(header string) (int64, bool) {
-	tmp, ok := jsip.RawMsg[header]
-	if ok {
-		tmpn, ok := tmp.(json.Number)
-		if ok {
-			tmpi, _ := strconv.ParseInt(string(tmpn), 10, 64)
-			return tmpi, true
-		}
-	}
-
-	return 0, false
+	return getJsonInt64(jsip.RawMsg, header)
 }
 
 func (jsip *JSIP) SetInt(header string, value int64) {
-	jsip.RawMsg[header] = json.Number(strconv.Itoa(int(value)))
+	jsip.RawMsg[header] = value
 }
 
 func (jsip *JSIP) GetString(header string) (string, bool) {
-	tmp, ok := jsip.RawMsg[header]
-	if ok {
-		tmps, ok := tmp.(string)
-		if ok {
-			return tmps, true
-		}
-	}
-
-	return "", false
+	v, ok := jsip.RawMsg[header].(string)
+	return v, ok
 }
 
 func (jsip *JSIP) SetString(header string, value string) {
@@ -661,71 +645,111 @@ func (stack *JSIPStack) connect(uri string) *WSConn {
 }
 
 // Syntax Check
-func (stack *JSIPStack) jsipUnParser(data []byte) (*JSIP, error) {
-	json, err := simplejson.NewJson(data)
-	if err != nil {
-		return nil, err
+func getJsonInt(j map[string]interface{}, key string) (int, bool) {
+	value, ok := j[key].(float64)
+	if !ok {
+		return 0, false
 	}
 
-	jsip := &JSIP{}
+	return int(value), true
+}
 
-	typ, err := json.Get("Type").String()
-	if err != nil {
-		return nil, errors.New("no Type in jsip msg")
+func getJsonInt64(j map[string]interface{}, key string) (int64, bool) {
+	value, ok := j[key].(float64)
+	if !ok {
+		return 0, false
+	}
+
+	return int64(value), true
+}
+
+func getJsonUint(j map[string]interface{}, key string) (uint, bool) {
+	value, ok := j[key].(float64)
+	if !ok {
+		return 0, false
+	}
+
+	return uint(value), true
+}
+
+func getJsonUint64(j map[string]interface{}, key string) (uint64, bool) {
+	value, ok := j[key].(float64)
+	if !ok {
+		return 0, false
+	}
+
+	return uint64(value), true
+}
+
+func (stack *JSIPStack) jsipUnParser(data []byte) (*JSIP, error) {
+	j, ok := gjson.ParseBytes(data).Value().(map[string]interface{})
+	if !ok {
+		return nil, errors.New("data is not json object")
+	}
+
+	jsip := &JSIP{
+		RawMsg: j,
+	}
+
+	typ, ok := j["Type"].(string)
+	if !ok {
+		return nil, errors.New("Type error")
 	}
 
 	if typ == "RESPONSE" {
-		jsip.Code, err = json.Get("Code").Int()
-		if err != nil {
-			return nil, errors.New("no Code in jsip response")
+		jsip.Code, ok = getJsonInt(j, "Code")
+		if !ok {
+			return nil, errors.New("Code error")
 		}
 
 		if jsip.Code < 100 || jsip.Code > 699 {
-			return nil, fmt.Errorf("unexpected status code %d", jsip.Code)
+			return nil, fmt.Errorf("Unexpected status code %d", jsip.Code)
 		}
 	} else {
 		jsip.Type = jsipReqUnparse[typ]
 		if jsip.Type == UNKNOWN {
-			return nil, errors.New("unexpected Type")
+			return nil, errors.New("Unknown Type")
 		}
 
-		jsip.RequestURI, err = json.Get("Request-URI").String()
-		if err != nil {
-			return nil, errors.New("no Request-URI in jsip request")
+		jsip.RequestURI, ok = j["Request-URI"].(string)
+		if !ok {
+			return nil, errors.New("Request-URI error")
 		}
 	}
 
-	jsip.From, err = json.Get("From").String()
-	if err != nil {
-		return nil, errors.New("no From in jsip message")
+	jsip.From, ok = j["From"].(string)
+	if !ok {
+		return nil, errors.New("From error")
 	}
 
-	jsip.To, err = json.Get("To").String()
-	if err != nil {
-		return nil, errors.New("no To in jsip message")
+	jsip.To, ok = j["To"].(string)
+	if !ok {
+		return nil, errors.New("To error")
 	}
 
-	jsip.DialogueID, err = json.Get("DialogueID").String()
-	if err != nil {
-		return nil, errors.New("no DialogueID in jsip message")
+	jsip.DialogueID, ok = j["DialogueID"].(string)
+	if !ok {
+		return nil, errors.New("DialogueID error")
 	}
 
-	jsip.CSeq, err = json.Get("CSeq").Uint64()
-	if err != nil {
-		return nil, errors.New("no CSeq in jsip message")
+	jsip.CSeq, ok = getJsonUint64(j, "CSeq")
+	if !ok {
+		return nil, errors.New("CSeq error")
 	}
 
-	routers, _ := json.Get("Router").String()
-	if routers != "" {
+	routers, ok := j["Router"].(string)
+	if ok {
 		jsip.Router = strings.Split(routers, ",")
 		for i := 0; i < len(jsip.Router); i++ {
 			jsip.Router[i] = strings.TrimSpace(jsip.Router[i])
 		}
 	}
 
-	jsip.RawMsg, err = json.Map()
-
-	jsip.Body = json.Get("Body")
+	body, ok := j["Body"]
+	if ok {
+		b, _ := json.Marshal(body)
+		jsip.Body = string(b)
+	}
 
 	return jsip, nil
 }
@@ -753,7 +777,7 @@ func (stack *JSIPStack) jsipParser(jsip *JSIP) *JSIP {
 		jsip.RawMsg["Router"] = router
 	}
 
-	if jsip.Body != nil {
+	if jsip.Body != "" {
 		jsip.RawMsg["Body"] = jsip.Body
 	}
 
