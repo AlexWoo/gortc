@@ -273,6 +273,50 @@ func JSIPMsgBye(session *JSIPSession) *JSIP {
 	return bye
 }
 
+func JSIPMsgTerm(session *JSIPSession) *JSIP {
+	if session.Type == INVITE {
+		if session.State >= INVITE_ERR {
+			return nil
+		}
+
+		if session.State >= INVITE_200 {
+			bye := JSIPMsgBye(session)
+			session.cseq++
+			bye.CSeq = session.cseq
+
+			return bye
+		}
+
+		if session.UAType == UAC {
+			cancel := JSIPMsgCancel(session.req)
+			session.cseq++
+			cancel.CSeq = session.cseq
+
+			return cancel
+		} else {
+			resp := JSIPMsgRes(session.req, 487)
+
+			return resp
+		}
+	} else {
+		if session.State >= TRANS_FINALRESP {
+			return nil
+		}
+
+		if session.UAType == UAC {
+			cancel := JSIPMsgCancel(session.req)
+			session.cseq++
+			cancel.CSeq = session.cseq
+
+			return cancel
+		} else {
+			resp := JSIPMsgRes(session.req, 487)
+
+			return resp
+		}
+	}
+}
+
 func JSIPMsgUpdate(session *JSIPSession) *JSIP {
 	update := &JSIP{
 		Type:       UPDATE,
