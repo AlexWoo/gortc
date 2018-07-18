@@ -195,6 +195,88 @@ type JSIP struct {
 	Session     *JSIPSession
 }
 
+type JSIPUri struct {
+	// [[prefix:]user@]host[:port][;para1=value][;para2]
+	UserWithHost   string
+	UserWithPrefix string
+	HostWithPort   string
+	Prefix         string
+	User           string
+	Host           string
+	Port           uint16
+	Paras          map[string]interface{} // string or bool
+}
+
+func ParseJSIPUri(uri string) (*JSIPUri, error) {
+	if uri == "" {
+		return nil, errors.New("Null uri")
+	}
+
+	jsipUri := &JSIPUri{
+		Paras: make(map[string]interface{}),
+	}
+
+	ss := strings.Split(uri, ";")
+	if len(ss) >= 2 { // Has paras
+		paras := ss[1:]
+		for _, para := range paras {
+			pp := strings.SplitN(para, "=", 2)
+			if pp[0] == "" {
+				return nil, errors.New("Null para")
+			}
+
+			if len(pp) == 1 {
+				jsipUri.Paras[pp[0]] = true
+			} else {
+				jsipUri.Paras[pp[0]] = pp[1]
+			}
+		}
+	}
+
+	hostPart := ss[0]
+	ss = strings.Split(hostPart, "@")
+	if len(ss) == 1 {
+		jsipUri.HostWithPort = ss[0]
+	} else if len(ss) == 2 {
+		jsipUri.UserWithPrefix = ss[0]
+		jsipUri.HostWithPort = ss[1]
+	} else {
+		return nil, errors.New("Too many '@' in host part")
+	}
+
+	ss = strings.Split(jsipUri.HostWithPort, ":")
+	jsipUri.Host = ss[0]
+	if len(ss) == 2 { // Has port
+		port, err := strconv.ParseUint(ss[1], 10, 16)
+		if err != nil {
+			return nil, err
+		}
+		jsipUri.Port = uint16(port)
+	} else if len(ss) > 2 {
+		return nil, errors.New("HostWithPort format error")
+	}
+
+	if jsipUri.UserWithPrefix != "" { // Has UserWithPrefix
+		ss = strings.Split(jsipUri.UserWithPrefix, ":")
+		if len(ss) == 1 {
+			jsipUri.User = ss[0]
+		} else if len(ss) == 2 {
+			jsipUri.Prefix = ss[0]
+			jsipUri.User = ss[1]
+		} else {
+			return nil, errors.New("UserWithPrefix format error")
+		}
+	}
+
+	if jsipUri.UserWithPrefix != "" {
+		jsipUri.UserWithHost = jsipUri.UserWithPrefix + "@" + jsipUri.Host
+	} else {
+		jsipUri.UserWithHost = jsipUri.Host
+	}
+
+	return jsipUri, nil
+}
+
 func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 	msg := &JSIP{
 		Type:       req.Type,
@@ -655,35 +737,17 @@ func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
 
-func (stack *JSIPStack) parseUri(uri string) (string, string) {
-	var userWithHost, hostWithPort string
-
-	ss := strings.Split(uri, ";")
-	uri = ss[0]
-
-	ss = strings.Split(uri, "@")
-	if len(ss) == 1 {
-		hostWithPort = ss[0]
-	} else {
-		hostWithPort = ss[1]
-	}
-
-	ss = strings.Split(uri, ":")
-	userWithHost = ss[0]
-
-	return userWithHost, hostWithPort
-}
-
 func (stack *JSIPStack) connect(uri string) *WSConn {
-	userWithHost, hostWithPort := stack.parseUri(uri)
-	if userWithHost == "" {
+	jsipUri, err := ParseJSIPUri(uri)
+	if err != nil {
+		stack.log.LogError("Parse uri %s error: %v", uri, err)
 		return nil
 	}
 
-	url := "ws://" + hostWithPort + jstack.Location() + "?userid=" +
+	url := "ws://" + jsipUri.HostWithPort + jstack.Location() + "?userid=" +
 		jstack.Realm()
-	conn := NewWSConn(userWithHost, url, UAC, jstack.Timeout(), jstack.Qsize(),
-		RecvMsg)
+	conn := NewWSConn(jsipUri.UserWithHost, url, UAC, jstack.Timeout(),
+		jstack.Qsize(), RecvMsg)
 
 	return conn
 }
