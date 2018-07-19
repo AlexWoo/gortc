@@ -11,13 +11,7 @@ case ".$RTCPATH" in
     *)                              ;;
 esac
 
-MACROFILE=src/rtclib/macro.go
-
-. auto/tmpl
-
-key=RTCPATH
-value="\"$RTCPATH\""
-. auto/macro
+sed -i "s#rtcpath = \"/usr/local/gortc\"#rtcpath = \"$RTCPATH\"#" src/gortc/gortc.go
 
 DEPENDENCE=`cat auto/dependence`
 

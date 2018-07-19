@@ -91,8 +91,8 @@ func slpLoad(name string, slpFile string) bool {
 }
 
 func initSLPM() bool {
-	slpm.slpconf = rtclib.RTCPATH + "/conf/.slps"
-	slpm.slpdir = rtclib.RTCPATH + "/slp/"
+	slpm.slpconf = module.rtcpath + "/conf/.slps"
+	slpm.slpdir = module.rtcpath + "/slp/"
 
 	f, err := os.Open(slpm.slpconf)
 	defer f.Close()

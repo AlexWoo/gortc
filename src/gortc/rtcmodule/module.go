@@ -24,6 +24,7 @@ type RTCModuleConfig struct {
 }
 
 type RTCModule struct {
+	rtcpath   string
 	config    *RTCModuleConfig
 	server    *http.Server
 	tlsServer *http.Server
@@ -35,8 +36,10 @@ type RTCModule struct {
 
 var module *RTCModule
 
-func NewRTCModule() *RTCModule {
-	module = &RTCModule{}
+func NewRTCModule(rtcpath string) *RTCModule {
+	module = &RTCModule{
+		rtcpath: rtcpath,
+	}
 
 	return module
 }
@@ -44,7 +47,7 @@ func NewRTCModule() *RTCModule {
 func (m *RTCModule) LoadConfig() bool {
 	m.config = new(RTCModuleConfig)
 
-	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
+	confPath := m.rtcpath + "/conf/gortc.ini"
 
 	f, err := ini.Load(confPath)
 	if err != nil {
@@ -97,7 +100,7 @@ func (m *RTCModule) Init() bool {
 	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
 
-	m.jstack = rtclib.InitJSIPStack(m.jsipC, log, rtclib.RTCPATH)
+	m.jstack = rtclib.InitJSIPStack(m.jsipC, log, m.rtcpath)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false
@@ -117,7 +120,7 @@ func (m *RTCModule) Init() bool {
 			return false
 		}
 
-		m.config.Cert = rtclib.RTCPATH + "/certs/" + m.config.Cert
+		m.config.Cert = m.rtcpath + "/certs/" + m.config.Cert
 
 		_, err := os.Stat(m.config.Cert)
 		if err != nil {
@@ -125,7 +128,7 @@ func (m *RTCModule) Init() bool {
 			return false
 		}
 
-		m.config.Key = rtclib.RTCPATH + "/certs/" + m.config.Key
+		m.config.Key = m.rtcpath + "/certs/" + m.config.Key
 
 		_, err = os.Stat(m.config.Key)
 		if err != nil {

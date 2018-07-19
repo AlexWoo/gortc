@@ -27,7 +27,7 @@ func (handle RTCLogHandle) LogSuffix(loglv int) string {
 }
 
 func initLog() {
-	logPath := rtclib.RTCPATH + "/logs/error.log"
+	logPath := rtcpath + "/logs/error.log"
 	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
 		rtclib.LOGINFO)
 

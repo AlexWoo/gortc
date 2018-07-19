@@ -22,6 +22,7 @@ type APIModuleConfig struct {
 }
 
 type APIModule struct {
+	rtcpath   string
 	config    *APIModuleConfig
 	server    *http.Server
 	tlsServer *http.Server
@@ -29,8 +30,10 @@ type APIModule struct {
 
 var module *APIModule
 
-func NewAPIModule() *APIModule {
-	module := &APIModule{}
+func NewAPIModule(rtcpath string) *APIModule {
+	module = &APIModule{
+		rtcpath: rtcpath,
+	}
 
 	return module
 }
@@ -38,7 +41,7 @@ func NewAPIModule() *APIModule {
 func (m *APIModule) LoadConfig() bool {
 	m.config = new(APIModuleConfig)
 
-	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
+	confPath := m.rtcpath + "/conf/gortc.ini"
 
 	f, err := ini.Load(confPath)
 	if err != nil {
@@ -71,7 +74,7 @@ func (m *APIModule) Init() bool {
 			return false
 		}
 
-		m.config.Cert = rtclib.RTCPATH + "/certs/" + m.config.Cert
+		m.config.Cert = m.rtcpath + "/certs/" + m.config.Cert
 
 		_, err := os.Stat(m.config.Cert)
 		if err != nil {
@@ -79,7 +82,7 @@ func (m *APIModule) Init() bool {
 			return false
 		}
 
-		m.config.Key = rtclib.RTCPATH + "/certs/" + m.config.Key
+		m.config.Key = m.rtcpath + "/certs/" + m.config.Key
 
 		_, err = os.Stat(m.config.Key)
 		if err != nil {

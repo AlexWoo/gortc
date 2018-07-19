@@ -34,11 +34,14 @@ type MainConfig struct {
 	LogRotateSize rtclib.Size_t
 }
 
-var config *MainConfig
-var signals chan os.Signal
+var (
+	config  *MainConfig
+	signals chan os.Signal
+	rtcpath = "/root/gortc"
+)
 
 func loadConfig() {
-	confPath := rtclib.RTCPATH + "/conf/gortc.ini"
+	confPath := rtcpath + "/conf/gortc.ini"
 	config = new(MainConfig)
 
 	f, err := ini.Load(confPath)
@@ -105,8 +108,8 @@ func mainloop() {
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	addModule("apimodule", apimodule.NewAPIModule())
-	addModule("rtcmodule", rtcmodule.NewRTCModule())
+	addModule("apimodule", apimodule.NewAPIModule(rtcpath))
+	addModule("rtcmodule", rtcmodule.NewRTCModule(rtcpath))
 }
 
 func main() {
