@@ -862,10 +862,9 @@ func (stack *JSIPStack) jsipUnParser(data []byte) (*JSIP, error) {
 		}
 	}
 
-	body, ok := j["Body"]
-	if ok {
-		b, _ := json.Marshal(body)
-		jsip.Body = string(b)
+	r := gjson.GetBytes(data, "Body")
+	if r.Exists() {
+		jsip.Body = r.String()
 	}
 
 	return jsip, nil
