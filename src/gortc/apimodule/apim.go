@@ -5,13 +5,15 @@
 package apimodule
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"plugin"
 	"rtclib"
 
-	simplejson "github.com/bitly/go-simplejson"
+	"github.com/tidwall/gjson"
 )
 
 type API interface {
@@ -90,21 +92,21 @@ func initAPIM() bool {
 		return false
 	}
 
-	json, err := simplejson.NewFromReader(f)
-	if err != nil {
+	json, _ := ioutil.ReadAll(f)
+	if !gjson.ValidBytes(json) {
 		LogError("parse file %s failed: %v", apim.apiconf, err)
 		return false
 	}
 
-	j, err := json.Map()
-	if err != nil {
+	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
+	if !ok {
 		LogError("api file %s format error: %v", apim.apiconf, err)
 		return false
 	}
 
-	for name, _ := range j {
-		path, err := json.Get(name).String()
-		if err != nil {
+	for name, v := range j {
+		path, ok := v.(string)
+		if !ok {
 			LogError("api %s format error: %v", name, err)
 			return false
 		}
@@ -121,18 +123,13 @@ func initAPIM() bool {
 }
 
 func updateAPIFile() error {
-	json := simplejson.New()
-	for k, v := range apim.plugins {
-		json.Set(k, v)
-	}
-
 	f, err := os.OpenFile(apim.apiconf, os.O_TRUNC|os.O_WRONLY, 0644)
 	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("open file %s failed: %v", apim.apiconf, err)
 	}
 
-	d, _ := json.MarshalJSON()
+	d, _ := json.Marshal(apim.plugins)
 
 	_, err = f.Write(d)
 	if err != nil {

@@ -5,14 +5,16 @@
 package rtcmodule
 
 import (
+	"encoding/json"
 	"fmt"
 	"gortc/apimodule"
+	"io/ioutil"
 	"os"
 	"plugin"
 	"rtclib"
 	"time"
 
-	simplejson "github.com/bitly/go-simplejson"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -99,21 +101,21 @@ func initSLPM() bool {
 		return false
 	}
 
-	json, err := simplejson.NewFromReader(f)
-	if err != nil {
+	json, _ := ioutil.ReadAll(f)
+	if !gjson.ValidBytes(json) {
 		LogError("parse file %s failed: %v", slpm.slpconf, err)
 		return false
 	}
 
-	j, err := json.Map()
-	if err != nil {
+	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
+	if !ok {
 		LogError("slp file %s format error: %v", slpm.slpconf, err)
 		return false
 	}
 
-	for name, _ := range j {
-		path, err := json.Get(name).String()
-		if err != nil {
+	for name, v := range j {
+		path, ok := v.(string)
+		if !ok {
 			LogError("slp %s format error: %v", name, err)
 			return false
 		}
@@ -130,18 +132,13 @@ func initSLPM() bool {
 }
 
 func updateSLPFile() error {
-	json := simplejson.New()
-	for k, v := range slpm.plugins {
-		json.Set(k, v)
-	}
-
 	f, err := os.OpenFile(slpm.slpconf, os.O_TRUNC|os.O_WRONLY, 0644)
 	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("open file %s failed: %v", slpm.slpconf, err)
 	}
 
-	d, _ := json.MarshalJSON()
+	d, _ := json.Marshal(slpm.plugins)
 
 	_, err = f.Write(d)
 	if err != nil {

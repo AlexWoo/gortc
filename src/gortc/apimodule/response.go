@@ -5,11 +5,10 @@
 package apimodule
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
-
-	simplejson "github.com/bitly/go-simplejson"
 )
 
 var syscode = map[int]RespCode{
@@ -31,7 +30,7 @@ type RespCode struct {
 type Response struct {
 	status  int
 	headers map[string]string
-	body    *simplejson.Json
+	body    map[string]interface{}
 }
 
 func NewResponse(code int, headers *map[string]string, body interface{},
@@ -51,8 +50,12 @@ func NewResponse(code int, headers *map[string]string, body interface{},
 	}
 
 	// init resp
-	resp := &Response{status: c.Status}
-	resp.headers = make(map[string]string)
+	resp := &Response{
+		status:  c.Status,
+		headers: make(map[string]string),
+		body:    make(map[string]interface{}),
+	}
+
 	resp.headers["Server"] = "RTC-APIServer"
 	resp.headers["Content-Type"] = "application/json; charset=utf-8"
 
@@ -70,9 +73,8 @@ func NewResponse(code int, headers *map[string]string, body interface{},
 }
 
 func (resp *Response) setBody(code int, msg string, body interface{}) {
-	resp.body = simplejson.New()
-	resp.body.Set("code", code)
-	resp.body.Set("msg", msg)
+	resp.body["code"] = code
+	resp.body["msg"] = msg
 
 	if body == nil {
 		return
@@ -81,7 +83,7 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 	typ := reflect.ValueOf(body).Kind()
 
 	if typ == reflect.String {
-		resp.body.Set("msg", body)
+		resp.body["msg"] = body
 		return
 	}
 
@@ -89,7 +91,7 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 		for _, k := range reflect.ValueOf(body).MapKeys() {
 			key := strings.ToLower(k.String())
 			val := reflect.ValueOf(body).MapIndex(k).Interface()
-			resp.body.Set(key, val)
+			resp.body[key] = val
 		}
 		return
 	}
@@ -100,7 +102,7 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 		for i := 0; i < t.NumField(); i++ {
 			key := strings.ToLower(t.Field(i).Name)
 			val := v.Field(i).Interface()
-			resp.body.Set(key, val)
+			resp.body[key] = val
 		}
 
 		return
@@ -108,8 +110,8 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 
 	//TODO logErr
 	resp.status = syscode[5].Status
-	resp.body.Set("code", 5)
-	resp.body.Set("msg", syscode[5].Msg)
+	resp.body["code"] = 5
+	resp.body["msg"] = syscode[5].Msg
 	return
 }
 
@@ -123,12 +125,12 @@ func (resp *Response) SendResp(w http.ResponseWriter) {
 	w.WriteHeader(resp.status)
 
 	// send body
-	code, _ := resp.body.Get("code").Int()
+	code, _ := resp.body["code"].(int)
 	if code == -1 {
-		body, _ := resp.body.Get("msg").Bytes()
-		w.Write(body)
+		body, _ := resp.body["msg"].(string)
+		w.Write([]byte(body))
 	} else {
-		body, _ := resp.body.MarshalJSON()
+		body, _ := json.Marshal(resp.body)
 		w.Write(body)
 	}
 }
