@@ -84,10 +84,9 @@ func (m *RTCModule) handler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	conn := rtclib.NewWSConn(userid, "", rtclib.UAS, m.jstack.Timeout(),
-		m.jstack.Qsize(), rtclib.RecvMsg)
+	conn := golib.NewWSServer(userid, c, m.jstack.Qsize(), rtclib.RecvMsg)
 
-	conn.Accept(c)
+	conn.Accept()
 }
 
 func (m *RTCModule) Init() bool {

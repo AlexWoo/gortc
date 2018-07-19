@@ -169,6 +169,11 @@ const (
 )
 
 const (
+	UAS = iota
+	UAC
+)
+
+const (
 	RECV = iota
 	SEND
 )
@@ -191,7 +196,7 @@ type JSIP struct {
 	RawMsg     map[string]interface{}
 
 	inner       bool
-	conn        Conn
+	conn        golib.Conn
 	Transaction *JSIPTrasaction
 	Session     *JSIPSession
 }
@@ -509,7 +514,7 @@ type JSIPTrasaction struct {
 
 	timer *golib.Timer
 
-	conn Conn
+	conn golib.Conn
 }
 
 func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
@@ -586,7 +591,7 @@ type JSIPSession struct {
 	sessTimer *golib.Timer
 	err       bool
 
-	conn Conn
+	conn golib.Conn
 }
 
 func newJSIPSess(jsip *JSIP, sendrecv int) *JSIPSession {
@@ -695,8 +700,9 @@ func (sess *JSIPSession) sessionTimer() {
 type JSIPConfig struct {
 	Location     string `default:"rtc"`
 	Realm        string
-	Timeout      time.Duration `default:"1s"`
-	Qsize        golib.Size    `default:"1k"`
+	ConnTimeout  time.Duration `default:"3s"`
+	Retry        int64         `default:"10"`
+	Qsize        uint64        `default:"1024"`
 	TransTimer   time.Duration `default:"5s"`
 	PRTimer      time.Duration `default:"60s"`
 	SessionLayer bool          `default:"true"`
@@ -739,17 +745,18 @@ func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
 
-func (stack *JSIPStack) connect(uri string) *WSConn {
+func (stack *JSIPStack) connect(uri string) *golib.WSConn {
 	jsipUri, err := ParseJSIPUri(uri)
 	if err != nil {
 		stack.log.LogError("Parse uri %s error: %v", uri, err)
 		return nil
 	}
 
-	url := "ws://" + jsipUri.HostWithPort + jstack.Location() + "?userid=" +
-		jstack.Realm()
-	conn := NewWSConn(jsipUri.UserWithHost, url, UAC, jstack.Timeout(),
-		jstack.Qsize(), RecvMsg)
+	url := "ws://" + jsipUri.HostWithPort + stack.Location() + "?userid=" +
+		stack.config.Realm
+	conn := golib.NewWSClient(jsipUri.UserWithHost, url,
+		stack.config.ConnTimeout, int(stack.config.Retry),
+		stack.Qsize(), RecvMsg)
 
 	return conn
 }
@@ -1462,7 +1469,7 @@ func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	}
 
 	if jsip.conn == nil {
-		var conn *WSConn
+		var conn *golib.WSConn
 		if len(jsip.Router) > 0 {
 			conn = stack.connect(jsip.Router[0])
 		} else {
@@ -1549,19 +1556,11 @@ func (stack *JSIPStack) Location() string {
 	return stack.config.Location
 }
 
-func (stack *JSIPStack) Realm() string {
-	return stack.config.Realm
-}
-
-func (stack *JSIPStack) Timeout() time.Duration {
-	return stack.config.Timeout
-}
-
 func (stack *JSIPStack) Qsize() uint64 {
 	return uint64(stack.config.Qsize)
 }
 
-func RecvMsg(conn Conn, data []byte) {
+func RecvMsg(conn golib.Conn, data []byte) {
 	jstack.log.LogDebug("Recv[Raw]: %s", string(data))
 	jsip, err := jstack.jsipUnParser(data)
 	if err != nil {

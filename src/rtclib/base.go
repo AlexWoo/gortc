@@ -10,20 +10,3 @@ type Module interface {
 	Run()
 	Exit()
 }
-
-const (
-	UAS = iota
-	UAC
-)
-
-// Base Conn type
-type Conn interface {
-	// Accept connection as server
-	Accept(data interface{})
-
-	// Send data
-	Send(data []byte)
-
-	// Close connection
-	Close()
-}
