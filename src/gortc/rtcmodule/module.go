@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"rtclib"
-	"strings"
 
 	"github.com/alexwoo/golib"
 	"github.com/go-ini/ini"
@@ -166,16 +165,27 @@ func (m *RTCModule) processMsg(jsip *rtclib.JSIP) {
 	slpname := "default"
 
 	if len(jsip.Router) != 0 {
-		router0 := jsip.Router[0]
-		paras := strings.Split(router0, ";")[1:]
+		jsipUri, err := rtclib.ParseJSIPUri(jsip.Router[0])
+		if err != nil {
+			rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 400))
+			return
+		}
 
-		for _, para := range paras {
-			if strings.HasPrefix(para, "type=") {
-				ss := strings.SplitN(para, "=", 2)
-				if ss[1] != "" {
-					slpname = ss[1]
-				}
+		relid, ok := jsipUri.Paras["relid"].(string)
+		if ok {
+			t := rtclib.GetTask(relid)
+			if t == nil {
+				rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 400))
+				return
 			}
+
+			t.OnMsg(jsip)
+			return
+		}
+
+		name, ok := jsipUri.Paras["type"].(string)
+		if ok && name != "" {
+			slpname = name
 		}
 	}
 

@@ -42,11 +42,7 @@ func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV4()
 	dlg := jstack.config.Realm + u1.String()
 
-	taskRWLock.Lock()
-	defer taskRWLock.Unlock()
-
-	t.dlgs = append(t.dlgs, dlg)
-	tasks[dlg] = t
+	t.SetDlg(dlg)
 
 	return dlg
 }
@@ -98,6 +94,18 @@ func (t *Task) OnMsg(jsip *JSIP) {
 	t.msgs <- jsip
 }
 
+func (t *Task) SetDlg(dlg string) {
+	if dlg == "" {
+		return
+	}
+
+	taskRWLock.Lock()
+	defer taskRWLock.Unlock()
+
+	t.dlgs = append(t.dlgs, dlg)
+	tasks[dlg] = t
+}
+
 func GetTask(dlg string) *Task {
 	taskRWLock.RLock()
 	defer taskRWLock.RUnlock()
@@ -112,12 +120,7 @@ func NewTask(dlg string, taskq chan *Task) *Task {
 		quitC: make(chan bool, 1),
 	}
 
-	if dlg != "" {
-		taskRWLock.Lock()
-		t.dlgs = append(t.dlgs, dlg)
-		tasks[dlg] = t
-		taskRWLock.Unlock()
-	}
+	t.SetDlg(dlg)
 
 	go t.run()
 
