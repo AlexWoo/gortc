@@ -59,7 +59,7 @@ func apiLoad(name string, apiFile string) bool {
 		return false
 	}
 
-	v, err := p.Lookup("GetInstance")
+	v, err := p.Lookup("APIInstance")
 	if err != nil {
 		LogError("find api plugin entry error: %v", err)
 		return false

@@ -8,7 +8,7 @@ import (
 type V1 struct {
 }
 
-func GetInstance() apimodule.API {
+func APIInstance() apimodule.API {
 	return &V1{}
 }
 
