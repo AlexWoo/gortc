@@ -11,7 +11,10 @@ case ".$RTCPATH" in
     *)                              ;;
 esac
 
-sed -i "s#rtcpath = \"/usr/local/gortc\"#rtcpath = \"$RTCPATH\"#" src/gortc/gortc.go
+if [ ! -f src/gortc/gortc ];then
+    mv src/gortc/gortc.go src/gortc/gortc
+fi
+sed "s#rtcpath = \"/usr/local/gortc\"#rtcpath = \"$RTCPATH\"#" src/gortc/gortc > src/gortc/gortc.go
 
 DEPENDENCE=`cat auto/dependence`
 

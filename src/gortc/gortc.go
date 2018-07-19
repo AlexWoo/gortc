@@ -37,7 +37,7 @@ type MainConfig struct {
 var (
 	config  *MainConfig
 	signals chan os.Signal
-	rtcpath = "/root/gortc"
+	rtcpath = "/usr/local/gortc"
 )
 
 func loadConfig() {
