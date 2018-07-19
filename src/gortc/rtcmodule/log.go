@@ -28,8 +28,7 @@ func (handle RTCLogHandle) LogSuffix(loglv int) string {
 
 func initLog(config *RTCModuleConfig) {
 	logPath := module.rtcpath + "/logs/rtc.log"
-	logLevel := rtclib.ConfEnum(rtclib.LoglvEnum, config.LogLevel,
-		rtclib.LOGINFO)
+	logLevel := rtclib.LoglvEnum.ConfEnum(config.LogLevel, rtclib.LOGINFO)
 
 	rtclogHandle := RTCLogHandle{}
 	log = rtclib.NewLog(rtclogHandle, logPath, logLevel,

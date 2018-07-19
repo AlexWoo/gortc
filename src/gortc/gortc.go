@@ -11,12 +11,12 @@ import (
 	"gortc/rtcmodule"
 	"os"
 	"os/signal"
-	"rtclib"
 	"runtime"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/alexwoo/golib"
 	"github.com/go-ini/ini"
 )
 
@@ -31,7 +31,7 @@ func GetGID() uint64 {
 
 type MainConfig struct {
 	LogLevel      string
-	LogRotateSize rtclib.Size_t
+	LogRotateSize golib.Size
 }
 
 var (
@@ -50,7 +50,7 @@ func loadConfig() {
 		os.Exit(1)
 	}
 
-	if !rtclib.Config(f, "", config) {
+	if !golib.Config(f, "", config) {
 		fmt.Println("Parse config " + confPath + " Failed")
 		os.Exit(1)
 	}

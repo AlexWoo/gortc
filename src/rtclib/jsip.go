@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexwoo/golib"
 	"github.com/go-ini/ini"
 	"github.com/tidwall/gjson"
 )
@@ -694,7 +695,7 @@ type JSIPConfig struct {
 	Location     string `default:"rtc"`
 	Realm        string
 	Timeout      time.Duration `default:"1s"`
-	Qsize        Size_t        `default:"1k"`
+	Qsize        golib.Size    `default:"1k"`
 	TransTimer   time.Duration `default:"5s"`
 	PRTimer      time.Duration `default:"60s"`
 	SessionLayer bool          `default:"true"`
@@ -730,7 +731,7 @@ func (stack *JSIPStack) loadConfig() bool {
 		return false
 	}
 
-	return Config(f, "JSIPStack", stack.config)
+	return golib.Config(f, "JSIPStack", stack.config)
 }
 
 func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {

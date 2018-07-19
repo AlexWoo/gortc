@@ -7,14 +7,14 @@ package apimodule
 import (
 	"net/http"
 	"os"
-	"rtclib"
 
+	"github.com/alexwoo/golib"
 	"github.com/go-ini/ini"
 )
 
 type APIModuleConfig struct {
 	LogLevel      string
-	LogRotateSize rtclib.Size_t
+	LogRotateSize golib.Size
 	Listen        string
 	TlsListen     string
 	Cert          string
@@ -49,7 +49,7 @@ func (m *APIModule) LoadConfig() bool {
 		return false
 	}
 
-	return rtclib.Config(f, "APIModule", m.config)
+	return golib.Config(f, "APIModule", m.config)
 }
 
 func (m *APIModule) Init() bool {

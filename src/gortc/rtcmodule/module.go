@@ -10,13 +10,14 @@ import (
 	"rtclib"
 	"strings"
 
+	"github.com/alexwoo/golib"
 	"github.com/go-ini/ini"
 	"github.com/gorilla/websocket"
 )
 
 type RTCModuleConfig struct {
 	LogLevel      string
-	LogRotateSize rtclib.Size_t
+	LogRotateSize golib.Size
 	Listen        string
 	TlsListen     string
 	Cert          string
@@ -55,7 +56,7 @@ func (m *RTCModule) LoadConfig() bool {
 		return false
 	}
 
-	return rtclib.Config(f, "RTCModule", m.config)
+	return golib.Config(f, "RTCModule", m.config)
 }
 
 func wsCheckOrigin(r *http.Request) bool {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/alexwoo/golib"
 )
 
 const (
@@ -24,7 +26,7 @@ var LogLevel = []string{
 	"fatal",
 }
 
-var LoglvEnum = map[string]int{
+var LoglvEnum = golib.Enum{
 	"debug": LOGDEBUG,
 	"info":  LOGINFO,
 	"error": LOGERROR,
