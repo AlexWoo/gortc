@@ -507,7 +507,7 @@ type JSIPTrasaction struct {
 	cseq   uint64
 	tid    string
 
-	timer *Timer
+	timer *golib.Timer
 
 	conn Conn
 }
@@ -528,7 +528,8 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 		trans.UAType = UAC
 	}
 
-	trans.timer = NewTimer(jstack.config.TransTimer, trans.timerHandle, nil)
+	trans.timer = golib.NewTimer(jstack.config.TransTimer,
+		trans.timerHandle, nil)
 
 	jstack.transactions[tid] = trans
 	jsip.Transaction = trans
@@ -582,7 +583,7 @@ type JSIPSession struct {
 	handler func(session *JSIPSession, jsip *JSIP, sendrecv int) int
 
 	expire    time.Duration
-	sessTimer *Timer
+	sessTimer *golib.Timer
 	err       bool
 
 	conn Conn
@@ -1200,7 +1201,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				return OK
 			case jsip.Code == 200:
 				session.State = INVITE_200
-				session.sessTimer = NewTimer(session.expire,
+				session.sessTimer = golib.NewTimer(session.expire,
 					session.timerHandle, nil)
 				return OK
 			case jsip.Code >= 300:
@@ -1216,7 +1217,7 @@ func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 				return OK
 			case jsip.Code == 200:
 				session.State = INVITE_200
-				session.sessTimer = NewTimer(session.expire,
+				session.sessTimer = golib.NewTimer(session.expire,
 					session.timerHandle, nil)
 				return OK
 			case jsip.Code >= 300:
