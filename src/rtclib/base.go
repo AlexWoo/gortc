@@ -4,6 +4,13 @@
 
 package rtclib
 
+type Module interface {
+	LoadConfig() bool
+	Init() bool
+	Run()
+	Exit()
+}
+
 const (
 	UAS = iota
 	UAC

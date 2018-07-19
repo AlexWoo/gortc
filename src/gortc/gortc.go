@@ -72,7 +72,7 @@ func initSignal() {
 }
 
 func mainloop() {
-	rtclib.RunModule(rtclog)
+	runModule()
 	t := time.NewTimer(time.Second * 1)
 	exit := false
 
@@ -83,14 +83,14 @@ func mainloop() {
 
 			switch s {
 			case syscall.SIGINT:
-				rtclib.ExitModule()
+				exitModule()
 			case syscall.SIGQUIT:
-				rtclib.ExitModule()
+				exitModule()
 			case syscall.SIGTERM:
 				exit = true
 			}
 		case <-t.C:
-			if !rtclib.CheckModule() {
+			if !checkModule() {
 				LogError("All Module Exit")
 				exit = true
 			}
@@ -105,8 +105,8 @@ func mainloop() {
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	rtclib.AddModule("apimodule", apimodule.NewAPIModule())
-	rtclib.AddModule("rtcmodule", rtcmodule.NewRTCModule())
+	addModule("apimodule", apimodule.NewAPIModule())
+	addModule("rtcmodule", rtcmodule.NewRTCModule())
 }
 
 func main() {
@@ -118,7 +118,7 @@ func main() {
 	initLog()
 
 	LogInfo("gortc init modules ...")
-	rtclib.InitModule(rtclog, rtclib.RTCPATH)
+	initModule()
 	apimodule.AddInternalAPI("runtime.v1", RunTimeV1)
 
 	LogInfo("gortc init successd, start Running ...")
