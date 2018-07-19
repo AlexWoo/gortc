@@ -5,34 +5,31 @@
 package apimodule
 
 import (
-	"fmt"
 	"os"
-	"rtclib"
-	"time"
+	"strconv"
+
+	"github.com/alexwoo/golib"
 )
 
 type RTCLogHandle struct {
 }
 
-var log *rtclib.Log
+var log *golib.Log
 
-func (handle *RTCLogHandle) LogPrefix(loglv int) string {
-	timestr := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("%s %s [api] %d",
-		timestr, rtclib.LogLevel[loglv], os.Getpid())
+func (handle *RTCLogHandle) Prefix() string {
+	return "[api] " + strconv.Itoa(os.Getpid())
 }
 
-func (handle *RTCLogHandle) LogSuffix(loglv int) string {
+func (handle *RTCLogHandle) Suffix() string {
 	return ""
 }
 
 func initLog(config *APIModuleConfig) {
 	logPath := module.rtcpath + "/logs/api.log"
-	logLevel := rtclib.LoglvEnum.ConfEnum(config.LogLevel, rtclib.LOGINFO)
+	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	rtclogHandle := &RTCLogHandle{}
-	log = rtclib.NewLog(rtclogHandle, logPath, logLevel,
-		int64(config.LogRotateSize))
+	log = golib.NewLog(rtclogHandle, logPath, logLevel)
 	if log == nil {
 		os.Exit(1)
 	}

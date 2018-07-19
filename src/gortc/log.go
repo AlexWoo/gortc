@@ -5,34 +5,31 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"rtclib"
-	"time"
+	"strconv"
+
+	"github.com/alexwoo/golib"
 )
 
 type RTCLogHandle struct {
 }
 
-var rtclog *rtclib.Log
+var rtclog *golib.Log
 
-func (handle RTCLogHandle) LogPrefix(loglv int) string {
-	timestr := time.Now().Format("2006-01-02 15:04:05.000")
-	return fmt.Sprintf("%s %s [main] %d", timestr, rtclib.LogLevel[loglv],
-		os.Getpid())
+func (handle RTCLogHandle) Prefix() string {
+	return "[main] " + strconv.Itoa(os.Getpid())
 }
 
-func (handle RTCLogHandle) LogSuffix(loglv int) string {
+func (handle RTCLogHandle) Suffix() string {
 	return ""
 }
 
 func initLog() {
 	logPath := rtcpath + "/logs/error.log"
-	logLevel := rtclib.LoglvEnum.ConfEnum(config.LogLevel, rtclib.LOGINFO)
+	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	rtclogHandle := RTCLogHandle{}
-	rtclog = rtclib.NewLog(rtclogHandle, logPath, logLevel,
-		int64(config.LogRotateSize))
+	rtclog = golib.NewLog(rtclogHandle, logPath, logLevel)
 	if rtclog == nil {
 		os.Exit(1)
 	}

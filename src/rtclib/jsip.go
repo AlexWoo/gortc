@@ -706,7 +706,7 @@ type JSIPStack struct {
 	confPath string
 	config   *JSIPConfig
 	jsipC    chan *JSIP
-	log      *Log
+	log      *golib.Log
 
 	recvq_t      chan *JSIP
 	sendq_t      chan *JSIP
@@ -1507,7 +1507,9 @@ func (stack *JSIPStack) run() {
 }
 
 // Init JSIP Stack
-func InitJSIPStack(jsipC chan *JSIP, log *Log, rtcpath string) *JSIPStack {
+func InitJSIPStack(jsipC chan *JSIP, log *golib.Log,
+	rtcpath string) *JSIPStack {
+
 	jstack = &JSIPStack{
 		confPath:     rtcpath + "/conf/gortc.ini",
 		jsipC:        jsipC,
