@@ -4,6 +4,8 @@
 
 package rtclib
 
+var RTCPATH string
+
 type Module interface {
 	LoadConfig() bool
 	Init() bool
