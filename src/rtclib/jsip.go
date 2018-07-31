@@ -22,6 +22,7 @@ const (
 	ERROR = iota
 	OK
 	IGNORE
+	DONE
 )
 
 // SIP Request
@@ -38,6 +39,7 @@ const (
 	PRACK
 	SUBSCRIBE
 	MESSAGE
+	TERM
 )
 
 var jsipReqUnparse = map[string]int{
@@ -361,50 +363,6 @@ func JSIPMsgBye(session *JSIPSession) *JSIP {
 	return bye
 }
 
-func JSIPMsgTerm(session *JSIPSession) *JSIP {
-	if session.Type == INVITE {
-		if session.State >= INVITE_ERR {
-			return nil
-		}
-
-		if session.State >= INVITE_200 {
-			bye := JSIPMsgBye(session)
-			session.cseq++
-			bye.CSeq = session.cseq
-
-			return bye
-		}
-
-		if session.UAType == UAC {
-			cancel := JSIPMsgCancel(session.req)
-			session.cseq++
-			cancel.CSeq = session.cseq
-
-			return cancel
-		} else {
-			resp := JSIPMsgRes(session.req, 487)
-
-			return resp
-		}
-	} else {
-		if session.State >= TRANS_FINALRESP {
-			return nil
-		}
-
-		if session.UAType == UAC {
-			cancel := JSIPMsgCancel(session.req)
-			session.cseq++
-			cancel.CSeq = session.cseq
-
-			return cancel
-		} else {
-			resp := JSIPMsgRes(session.req, 487)
-
-			return resp
-		}
-	}
-}
-
 func JSIPMsgUpdate(session *JSIPSession) *JSIP {
 	update := &JSIP{
 		Type:       UPDATE,
@@ -707,6 +665,7 @@ type JSIPConfig struct {
 	PRTimer      time.Duration `default:"60s"`
 	SessionLayer bool          `default:"true"`
 	SessionTimer time.Duration `default:"600s"`
+	TermNotify   bool          `default:"false"`
 }
 
 type JSIPStack struct {
@@ -903,6 +862,10 @@ func (stack *JSIPStack) jsipParser(jsip *JSIP) *JSIP {
 func (stack *JSIPStack) jsipPrepared(jsip *JSIP) (*JSIP, error) {
 	if jsip.DialogueID == "" {
 		return nil, errors.New("DialogueID not set")
+	}
+
+	if jsip.Type == TERM {
+		return jsip, nil
 	}
 
 	if jsipReqParse[jsip.Type] == "" {
@@ -1137,6 +1100,36 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 func (stack *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 	sendrecv int) int {
 
+	if jsip.Type == TERM {
+		if session.State >= INVITE_ERR {
+			return IGNORE
+		}
+
+		if session.State >= INVITE_200 {
+			bye := JSIPMsgBye(session)
+			session.cseq++
+			bye.CSeq = session.cseq
+
+			SendMsg(bye)
+
+			return IGNORE
+		}
+
+		if session.UAType == UAC {
+			cancel := JSIPMsgCancel(session.req)
+			session.cseq++
+			cancel.CSeq = session.cseq
+
+			SendMsg(cancel)
+		} else {
+			resp := JSIPMsgRes(session.req, 487)
+
+			SendMsg(resp)
+		}
+
+		return IGNORE
+	}
+
 	if jsip.Type == INFO {
 		return OK
 	}
@@ -1298,6 +1291,26 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 		return IGNORE
 	}
 
+	if jsip.Type == TERM {
+		if session.State >= TRANS_FINALRESP {
+			return IGNORE
+		}
+
+		if session.UAType == UAC {
+			cancel := JSIPMsgCancel(session.req)
+			session.cseq++
+			cancel.CSeq = session.cseq
+
+			SendMsg(cancel)
+		} else {
+			resp := JSIPMsgRes(session.req, 487)
+
+			SendMsg(resp)
+		}
+
+		return IGNORE
+	}
+
 	switch session.State {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
@@ -1399,10 +1412,12 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 	if session.Type == INVITE {
 		if session.State >= INVITE_ERR {
 			session.delete()
+			ret = DONE
 		}
 	} else {
 		if session.State >= DEFAULT_RESP {
 			session.delete()
+			ret = DONE
 		}
 	}
 
@@ -1434,6 +1449,10 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 
 	stack.log.LogDebug("Recv: %s", jsip.Abstract())
 	stack.jsipC <- jsip
+
+	if ret == DONE && stack.config.TermNotify {
+		RecvJSIPTerm(jsip.DialogueID)
+	}
 }
 
 func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
@@ -1447,6 +1466,10 @@ func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 	}
 
 	stack.sendq_t <- jsip
+
+	if ret == DONE && stack.config.TermNotify {
+		RecvJSIPTerm(jsip.DialogueID)
+	}
 }
 
 func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
@@ -1557,6 +1580,28 @@ func (stack *JSIPStack) Location() string {
 
 func (stack *JSIPStack) Qsize() uint64 {
 	return uint64(stack.config.Qsize)
+}
+
+func RecvJSIPTerm(dlg string) {
+	jsip := &JSIP{
+		Type:       TERM,
+		DialogueID: dlg,
+	}
+
+	jstack.jsipC <- jsip
+}
+
+func SendJSIPTerm(dlg string) {
+	if !jstack.config.SessionLayer {
+		return
+	}
+
+	jsip := &JSIP{
+		Type:       TERM,
+		DialogueID: dlg,
+	}
+
+	SendMsg(jsip)
 }
 
 func RecvMsg(conn golib.Conn, data []byte) {
