@@ -285,6 +285,38 @@ func ParseJSIPUri(uri string) (*JSIPUri, error) {
 	return jsipUri, nil
 }
 
+func CopySlice(src []interface{}) []interface{} {
+	dst := make([]interface{}, 0, len(src))
+
+	for _, v := range src {
+		if d, ok := v.(map[string]interface{}); ok {
+			dst = append(dst, CopyMap(d))
+		} else if d, ok := v.([]interface{}); ok {
+			dst = append(dst, CopySlice(d))
+		} else {
+			dst = append(dst, v)
+		}
+	}
+
+	return dst
+}
+
+func CopyMap(src map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{})
+
+	for k, v := range src {
+		if d, ok := v.(map[string]interface{}); ok {
+			dst[k] = CopyMap(d)
+		} else if d, ok := v.([]interface{}); ok {
+			dst[k] = CopySlice(d)
+		} else {
+			dst[k] = v
+		}
+	}
+
+	return dst
+}
+
 func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 	msg := &JSIP{
 		Type:       req.Type,
@@ -296,7 +328,7 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 		DialogueID: dlg,
 		Router:     req.Router,
 		Body:       req.Body,
-		RawMsg:     req.RawMsg,
+		RawMsg:     CopyMap(req.RawMsg),
 	}
 
 	return msg
