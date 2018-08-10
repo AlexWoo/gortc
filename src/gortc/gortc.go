@@ -30,8 +30,7 @@ func GetGID() uint64 {
 }
 
 type MainConfig struct {
-	LogLevel      string
-	LogRotateSize golib.Size
+	LogLevel string
 }
 
 var (

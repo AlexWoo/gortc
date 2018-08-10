@@ -11,26 +11,28 @@ import (
 	"github.com/alexwoo/golib"
 )
 
-type RTCLogHandle struct {
+type logctx struct {
+	log *golib.Log
 }
 
-var rtclog *golib.Log
-
-func (handle RTCLogHandle) Prefix() string {
+func (ctx *logctx) Prefix() string {
 	return "[main] " + strconv.Itoa(os.Getpid())
 }
 
-func (handle RTCLogHandle) Suffix() string {
+func (ctx *logctx) Suffix() string {
 	return ""
 }
+
+var mainlogCtx *logctx
 
 func initLog() {
 	logPath := rtcpath + "/logs/error.log"
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	rtclogHandle := RTCLogHandle{}
-	rtclog = golib.NewLog(rtclogHandle, logPath, logLevel)
-	if rtclog == nil {
+	mainlogCtx = &logctx{
+		log: golib.NewLog(logPath, logLevel),
+	}
+	if mainlogCtx.log == nil {
 		os.Exit(1)
 	}
 
@@ -38,17 +40,17 @@ func initLog() {
 }
 
 func LogDebug(format string, v ...interface{}) {
-	rtclog.LogDebug(format, v...)
+	mainlogCtx.log.LogDebug(mainlogCtx, format, v...)
 }
 
 func LogInfo(format string, v ...interface{}) {
-	rtclog.LogInfo(format, v...)
+	mainlogCtx.log.LogInfo(mainlogCtx, format, v...)
 }
 
 func LogError(format string, v ...interface{}) {
-	rtclog.LogError(format, v...)
+	mainlogCtx.log.LogError(mainlogCtx, format, v...)
 }
 
 func LogFatal(format string, v ...interface{}) {
-	rtclog.LogFatal(format, v...)
+	mainlogCtx.log.LogFatal(mainlogCtx, format, v...)
 }

@@ -13,12 +13,11 @@ import (
 )
 
 type APIModuleConfig struct {
-	LogLevel      string
-	LogRotateSize golib.Size
-	Listen        string
-	TlsListen     string
-	Cert          string
-	Key           string
+	LogLevel  string
+	Listen    string
+	TlsListen string
+	Cert      string
+	Key       string
 }
 
 type APIModule struct {

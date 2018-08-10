@@ -14,23 +14,29 @@ import (
 type RTCLogHandle struct {
 }
 
-var log *golib.Log
+type logctx struct {
+	log *golib.Log
+}
 
-func (handle *RTCLogHandle) Prefix() string {
+func (ctx *logctx) Prefix() string {
 	return "[api] " + strconv.Itoa(os.Getpid())
 }
 
-func (handle *RTCLogHandle) Suffix() string {
+func (ctx *logctx) Suffix() string {
 	return ""
 }
+
+var apilogCtx *logctx
 
 func initLog(config *APIModuleConfig) {
 	logPath := module.rtcpath + "/logs/api.log"
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	rtclogHandle := &RTCLogHandle{}
-	log = golib.NewLog(rtclogHandle, logPath, logLevel)
-	if log == nil {
+	apilogCtx = &logctx{
+		log: golib.NewLog(logPath, logLevel),
+	}
+
+	if apilogCtx.log == nil {
 		os.Exit(1)
 	}
 
@@ -38,17 +44,17 @@ func initLog(config *APIModuleConfig) {
 }
 
 func LogDebug(format string, v ...interface{}) {
-	log.LogDebug(format, v...)
+	apilogCtx.log.LogDebug(apilogCtx, format, v...)
 }
 
 func LogInfo(format string, v ...interface{}) {
-	log.LogInfo(format, v...)
+	apilogCtx.log.LogInfo(apilogCtx, format, v...)
 }
 
 func LogError(format string, v ...interface{}) {
-	log.LogError(format, v...)
+	apilogCtx.log.LogError(apilogCtx, format, v...)
 }
 
 func LogFatal(format string, v ...interface{}) {
-	log.LogFatal(format, v...)
+	apilogCtx.log.LogFatal(apilogCtx, format, v...)
 }

@@ -336,7 +336,7 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 
 func JSIPMsgRes(req *JSIP, code int) *JSIP {
 	if req.Code != 0 {
-		jstack.log.LogError("Cannot send response for response")
+		jstack.log.LogError(req, "Cannot send response for response")
 		return nil
 	}
 
@@ -492,6 +492,20 @@ func (jsip *JSIP) GetString(header string) (string, bool) {
 
 func (jsip *JSIP) SetString(header string, value string) {
 	jsip.RawMsg[header] = value
+}
+
+func (jsip *JSIP) Prefix() string {
+	return "[jstack]"
+}
+
+func (jsip *JSIP) Suffix() string {
+	suf := ", " + jsip.Name()
+
+	if jsip.conn != nil {
+		suf += jsip.conn.Suffix()
+	}
+
+	return suf
 }
 
 type JSIPTrasaction struct {
@@ -724,7 +738,7 @@ func (stack *JSIPStack) loadConfig() bool {
 
 	f, err := ini.Load(stack.confPath)
 	if err != nil {
-		jstack.log.LogError("Load config file %s error: %v",
+		stack.log.LogError(stack, "Load config file %s error: %v",
 			stack.confPath, err)
 		return false
 	}
@@ -739,7 +753,7 @@ func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {
 func (stack *JSIPStack) connect(uri string) *golib.WSConn {
 	jsipUri, err := ParseJSIPUri(uri)
 	if err != nil {
-		stack.log.LogError("Parse uri %s error: %v", uri, err)
+		stack.log.LogError(stack, "Parse uri %s error: %v", uri, err)
 		return nil
 	}
 
@@ -747,7 +761,7 @@ func (stack *JSIPStack) connect(uri string) *golib.WSConn {
 		stack.config.Realm
 	conn := golib.NewWSClient(jsipUri.UserWithHost, url,
 		stack.config.ConnTimeout, int(stack.config.Retry),
-		stack.Qsize(), RecvMsg)
+		stack.Qsize(), RecvMsg, stack.log)
 
 	return conn
 }
@@ -941,7 +955,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 	if trans == nil { // Request
 		if jsip.Code != 0 {
-			stack.log.LogError("process %s but trans is nil", jsip.Name())
+			stack.log.LogError(jsip, "process %s but trans is nil", jsip.Name())
 			return ERROR
 		}
 
@@ -952,26 +966,27 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 			rid, ok := jsip.GetInt("RelatedID")
 			if !ok {
-				stack.log.LogInfo("ACK miss RelatedID")
+				stack.log.LogInfo(jsip, "ACK miss RelatedID")
 				return IGNORE
 			}
 
 			ackid := stack.transactionID(jsip, uint64(rid))
 			ackTrans := stack.transactions[ackid]
 			if ackTrans == nil {
-				stack.log.LogInfo("Transaction INVITE not exist")
+				stack.log.LogInfo(jsip, "Transaction INVITE not exist")
 				return IGNORE
 			}
 
 			if ackTrans.State < TRANS_FINALRESP {
-				stack.log.LogError("Recv ACK but not receive final response")
+				stack.log.LogError(jsip,
+					"Recv ACK but not receive final response")
 				return IGNORE
 			}
 
 			if ackTrans.UAType == UAS && sendrecv == SEND ||
 				ackTrans.UAType == UAC && sendrecv == RECV {
 
-				stack.log.LogError("ACK direct is not same as INVITE")
+				stack.log.LogError(jsip, "ACK direct is not same as INVITE")
 				return IGNORE
 			}
 
@@ -987,7 +1002,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			if !ok {
 				trans.delete()
 
-				stack.log.LogInfo("CANCEL miss RelatedID")
+				stack.log.LogInfo(jsip, "CANCEL miss RelatedID")
 				return IGNORE
 			}
 
@@ -996,14 +1011,15 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			if cancelTrans == nil {
 				trans.delete()
 
-				stack.log.LogInfo("Transaction Cancelled not exist")
+				stack.log.LogInfo(jsip, "Transaction Cancelled not exist")
 				return IGNORE
 			}
 
 			if cancelTrans.State >= TRANS_FINALRESP {
 				trans.delete()
 
-				stack.log.LogInfo("Transaction in finalize response, cannot cancel")
+				stack.log.LogInfo(jsip,
+					"Transaction in finalize response, cannot cancel")
 				return IGNORE
 			}
 
@@ -1012,7 +1028,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 				trans.delete()
 
-				stack.log.LogError("CANCEL direct is not same as Request")
+				stack.log.LogError(jsip, "CANCEL direct is not same as Request")
 				return IGNORE
 			}
 
@@ -1050,7 +1066,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
-		stack.log.LogError("process %s but trans exist", jsip.Name())
+		stack.log.LogError(jsip, "process %s but trans exist", jsip.Name())
 		return IGNORE
 	}
 
@@ -1058,7 +1074,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	if trans.UAType == UAS && sendrecv == RECV ||
 		trans.UAType == UAC && sendrecv == SEND {
 
-		stack.log.LogError("Response direct is same as Request direct")
+		stack.log.LogError(jsip, "Response direct is same as Request direct")
 		return IGNORE
 	}
 
@@ -1066,7 +1082,8 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 	if jsip.Code == 100 {
 		if trans.State > TRANS_TRYING {
-			stack.log.LogError("process 100 Trying but state is %d", trans.State)
+			stack.log.LogError(jsip, "process 100 Trying but state is %d",
+				trans.State)
 			return IGNORE
 		}
 
@@ -1077,7 +1094,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 	if jsip.Code < 200 && jsip.Code > 100 {
 		if trans.State > TRANS_PR {
-			stack.log.LogError("process %s but state is %d", jsip.Name(),
+			stack.log.LogError(jsip, "process %s but state is %d", jsip.Name(),
 				trans.State)
 			return IGNORE
 		}
@@ -1089,7 +1106,7 @@ func (stack *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	}
 
 	if trans.State >= TRANS_FINALRESP {
-		stack.log.LogError("process %s but state is %d", jsip.Name(),
+		stack.log.LogError(jsip, "process %s but state is %d", jsip.Name(),
 			trans.State)
 		return IGNORE
 	}
@@ -1310,7 +1327,7 @@ err:
 		session.State = INVITE_18X
 	}
 
-	stack.log.LogError("%s %s in %s", jsipDirect[sendrecv], jsip.Name(),
+	stack.log.LogError(jsip, "%s %s in %s", jsipDirect[sendrecv], jsip.Name(),
 		jsipInviteState[session.State])
 
 	return ERROR
@@ -1346,20 +1363,22 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 	switch session.State {
 	case DEFAULT_INIT:
 		if jsip.Code != 0 {
-			stack.log.LogError("Recv response %s but session state is DEFAULT_INIT",
+			stack.log.LogError(jsip,
+				"Recv response %s but session state is DEFAULT_INIT",
 				jsip.Name())
 			return ERROR
 		}
 
 		if session.Type == CANCEL {
-			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
+			stack.log.LogError(jsip,
+				"Session not exist when process msg %s", jsip.Name())
 			session.State = DEFAULT_RESP
 
 			resp := JSIPMsgRes(jsip, 481)
 			if sendrecv == RECV {
 				stack.sendq_t <- resp
 			} else {
-				stack.log.LogDebug("Recv: %s", resp.Abstract())
+				stack.log.LogDebug(jsip, "Recv: %s", resp.Abstract())
 				stack.jsipC <- resp
 			}
 
@@ -1368,7 +1387,8 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			session.Type != OPTIONS && session.Type != MESSAGE &&
 			session.Type != SUBSCRIBE {
 
-			stack.log.LogError("Session not exist when process msg %s", jsip.Name())
+			stack.log.LogError(jsip, "Session not exist when process msg %s",
+				jsip.Name())
 			session.State = DEFAULT_REQ
 
 			resp := JSIPMsgRes(jsip, 481)
@@ -1389,8 +1409,8 @@ func (stack *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 				return OK
 			}
 
-			stack.log.LogError("Recv request %s but session state is DEFAULT_REQ",
-				jsip.Name())
+			stack.log.LogError(jsip,
+				"Recv request %s but session state is DEFAULT_REQ", jsip.Name())
 
 			resp := JSIPMsgRes(jsip, 400)
 			if sendrecv == RECV {
@@ -1420,7 +1440,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 
 	if session == nil {
 		if jsip.Code != 0 {
-			stack.log.LogError("recv response but session is nil")
+			stack.log.LogError(jsip, "recv response but session is nil")
 			return IGNORE
 		}
 
@@ -1458,7 +1478,7 @@ func (stack *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 
 func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	stack.log.LogDebug("Recv[Transaction]: %s", jsip.Abstract())
+	stack.log.LogDebug(jsip, "Recv[Transaction]: %s", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1471,7 +1491,7 @@ func (stack *JSIPStack) recvJSIPMsg_t(jsip *JSIP) {
 
 func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
-	stack.log.LogDebug("Recv[Session]: %s", jsip.Abstract())
+	stack.log.LogDebug(jsip, "Recv[Session]: %s", jsip.Abstract())
 	ret := stack.jsipSession(jsip, RECV)
 	if ret == ERROR {
 		return
@@ -1479,7 +1499,7 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 		return
 	}
 
-	stack.log.LogDebug("Recv: %s", jsip.Abstract())
+	stack.log.LogDebug(jsip, "Recv: %s", jsip.Abstract())
 	stack.jsipC <- jsip
 
 	if ret == DONE && stack.config.TermNotify {
@@ -1489,7 +1509,7 @@ func (stack *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 
 func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 	// Session Layer
-	stack.log.LogDebug("Send[Session]: %s", jsip.Abstract())
+	stack.log.LogDebug(jsip, "Send[Session]: %s", jsip.Abstract())
 	ret := stack.jsipSession(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1506,7 +1526,7 @@ func (stack *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 
 func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	// Transaction Layer
-	stack.log.LogDebug("Send[Transaction]: %s", jsip.Abstract())
+	stack.log.LogDebug(jsip, "Send[Transaction]: %s", jsip.Abstract())
 	ret := stack.jsipTransaction(jsip, SEND)
 	if ret == ERROR {
 		return
@@ -1545,7 +1565,7 @@ func (stack *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	jsip = stack.jsipParser(jsip)
 
 	data, _ := json.Marshal(jsip.RawMsg)
-	stack.log.LogDebug("Send[Raw] %s", string(data))
+	stack.log.LogDebug(jsip, "Send[Raw] %s", string(data))
 	jsip.conn.Send(data)
 }
 
@@ -1585,7 +1605,7 @@ func InitJSIPStack(jsipC chan *JSIP, log *golib.Log,
 	}
 
 	if jstack.config.Realm == "" {
-		jstack.log.LogError("JSIPStack Realm not configured")
+		jstack.log.LogError(jstack, "JSIPStack Realm not configured")
 		return nil
 	}
 
@@ -1614,6 +1634,14 @@ func (stack *JSIPStack) Qsize() uint64 {
 	return uint64(stack.config.Qsize)
 }
 
+func (stack *JSIPStack) Prefix() string {
+	return "[jstack]"
+}
+
+func (stack *JSIPStack) Suffix() string {
+	return ""
+}
+
 func RecvJSIPTerm(dlg string) {
 	jsip := &JSIP{
 		Type:       TERM,
@@ -1637,10 +1665,10 @@ func SendJSIPTerm(dlg string) {
 }
 
 func RecvMsg(conn golib.Conn, data []byte) {
-	jstack.log.LogDebug("Recv[Raw]: %s", string(data))
+	jstack.log.LogDebug(conn, "Recv[Raw]: %s", string(data))
 	jsip, err := jstack.jsipUnParser(data)
 	if err != nil {
-		jstack.log.LogError("jsipUnParser err %s", err)
+		jstack.log.LogError(conn, "jsipUnParser err %s", err)
 		return
 	}
 
@@ -1650,10 +1678,10 @@ func RecvMsg(conn golib.Conn, data []byte) {
 }
 
 func SendMsg(jsip *JSIP) {
-	jstack.log.LogDebug("Send: %s", jsip.Abstract())
+	jstack.log.LogDebug(jsip, "Send: %s", jsip.Abstract())
 	jsip, err := jstack.jsipPrepared(jsip)
 	if err != nil {
-		jstack.log.LogError("jsipPrepared err %s", err)
+		jstack.log.LogError(jsip, "jsipPrepared err %s", err)
 		return
 	}
 
