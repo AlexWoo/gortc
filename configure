@@ -6,15 +6,12 @@
 . auto/options
 
 case ".$RTCPATH" in
-    .)  RTCPATH=/usr/local/gortc    ;;
+    .)  RTCPATH=/usr/local/gortc/   ;;
     .!) RTCPATH=./                  ;;
     *)                              ;;
 esac
 
-if [ ! -f src/gortc/gortc ];then
-    mv src/gortc/gortc.go src/gortc/gortc
-fi
-sed "s#rtcpath = \"/usr/local/gortc\"#rtcpath = \"$RTCPATH\"#" src/gortc/gortc > src/gortc/gortc.go
+sed -i "s#rtcpath = \".*\"#rtcpath = \"$RTCPATH\"#" src/gortc/gortc.go
 
 DEPENDENCE=`cat auto/dependence`
 
