@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/alexwoo/golib"
-	"github.com/go-ini/ini"
 )
 
 func GetGID() uint64 {
@@ -43,14 +42,9 @@ func loadConfig() {
 	confPath := rtcpath + "/conf/gortc.ini"
 	config = new(MainConfig)
 
-	f, err := ini.Load(confPath)
+	err := golib.ConfigFile(confPath, "", config)
 	if err != nil {
-		fmt.Println("Load "+confPath+" Failed: ", err)
-		os.Exit(1)
-	}
-
-	if !golib.Config(f, "", config) {
-		fmt.Println("Parse config " + confPath + " Failed")
+		fmt.Println("Parse config", confPath, "Failed", err)
 		os.Exit(1)
 	}
 }

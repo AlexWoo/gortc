@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alexwoo/golib"
-	"github.com/go-ini/ini"
 	"github.com/tidwall/gjson"
 )
 
@@ -736,14 +735,14 @@ var jstack *JSIPStack
 func (stack *JSIPStack) loadConfig() bool {
 	stack.config = new(JSIPConfig)
 
-	f, err := ini.Load(stack.confPath)
+	err := golib.ConfigFile(stack.confPath, "JSIPStack", stack.config)
 	if err != nil {
-		stack.log.LogError(stack, "Load config file %s error: %v",
+		stack.log.LogError(stack, "Parse config %s error: %v",
 			stack.confPath, err)
 		return false
 	}
 
-	return golib.Config(f, "JSIPStack", stack.config)
+	return true
 }
 
 func (stack *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {

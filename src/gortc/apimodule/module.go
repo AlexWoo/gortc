@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/alexwoo/golib"
-	"github.com/go-ini/ini"
 )
 
 type APIModuleConfig struct {
@@ -39,16 +38,15 @@ func NewAPIModule(rtcpath string) *APIModule {
 
 func (m *APIModule) LoadConfig() bool {
 	m.config = new(APIModuleConfig)
-
 	confPath := m.rtcpath + "/conf/gortc.ini"
 
-	f, err := ini.Load(confPath)
+	err := golib.ConfigFile(confPath, "APIModule", m.config)
 	if err != nil {
-		LogError("Load config file %s error: %v", confPath, err)
+		LogError("Parse config %s error: %v", confPath, err)
 		return false
 	}
 
-	return golib.Config(f, "APIModule", m.config)
+	return true
 }
 
 func (m *APIModule) Init() bool {

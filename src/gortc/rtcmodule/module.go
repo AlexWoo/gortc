@@ -10,7 +10,6 @@ import (
 	"rtclib"
 
 	"github.com/alexwoo/golib"
-	"github.com/go-ini/ini"
 	"github.com/gorilla/websocket"
 )
 
@@ -45,16 +44,15 @@ func NewRTCModule(rtcpath string) *RTCModule {
 
 func (m *RTCModule) LoadConfig() bool {
 	m.config = new(RTCModuleConfig)
-
 	confPath := m.rtcpath + "/conf/gortc.ini"
 
-	f, err := ini.Load(confPath)
+	err := golib.ConfigFile(confPath, "RTCModule", m.config)
 	if err != nil {
-		LogError("Load config file %s error: %v", confPath, err)
+		LogError("Parse config %s error: %v", confPath, err)
 		return false
 	}
 
-	return golib.Config(f, "RTCModule", m.config)
+	return true
 }
 
 func wsCheckOrigin(r *http.Request) bool {
