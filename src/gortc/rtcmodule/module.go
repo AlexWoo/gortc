@@ -14,7 +14,8 @@ import (
 )
 
 type RTCModuleConfig struct {
-	LogLevel  string
+	LogFile   string `default:"/logs/rtc.log"`
+	LogLevel  string `default:"info"`
 	Listen    string
 	TlsListen string
 	Cert      string
@@ -81,7 +82,7 @@ func (m *RTCModule) handler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	conn := golib.NewWSServer(userid, c, m.jstack.Qsize(), rtclib.RecvMsg,
-		rtclogCtx.log)
+		rtclogCtx.log, rtclogCtx.logLevel)
 
 	conn.Accept()
 }
@@ -99,7 +100,8 @@ func (m *RTCModule) Init() bool {
 	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
 
-	m.jstack = rtclib.InitJSIPStack(m.jsipC, rtclogCtx.log, m.rtcpath)
+	m.jstack = rtclib.InitJSIPStack(m.jsipC, rtclogCtx.log, rtclogCtx.logLevel,
+		m.rtcpath)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false

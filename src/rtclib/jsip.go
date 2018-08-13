@@ -507,6 +507,10 @@ func (jsip *JSIP) Suffix() string {
 	return suf
 }
 
+func (jsip *JSIP) LogLevel() int {
+	return jstack.logLevel
+}
+
 type JSIPTrasaction struct {
 	Type   int
 	State  int
@@ -718,6 +722,7 @@ type JSIPStack struct {
 	config   *JSIPConfig
 	jsipC    chan *JSIP
 	log      *golib.Log
+	logLevel int
 
 	recvq_t      chan *JSIP
 	sendq_t      chan *JSIP
@@ -760,7 +765,7 @@ func (stack *JSIPStack) connect(uri string) *golib.WSConn {
 		stack.config.Realm
 	conn := golib.NewWSClient(jsipUri.UserWithHost, url,
 		stack.config.ConnTimeout, int(stack.config.Retry),
-		stack.Qsize(), RecvMsg, stack.log)
+		stack.Qsize(), RecvMsg, stack.log, stack.logLevel)
 
 	return conn
 }
@@ -1588,13 +1593,14 @@ func (stack *JSIPStack) run() {
 }
 
 // Init JSIP Stack
-func InitJSIPStack(jsipC chan *JSIP, log *golib.Log,
+func InitJSIPStack(jsipC chan *JSIP, log *golib.Log, logLevel int,
 	rtcpath string) *JSIPStack {
 
 	jstack = &JSIPStack{
 		confPath:     rtcpath + "/conf/gortc.ini",
 		jsipC:        jsipC,
 		log:          log,
+		logLevel:     logLevel,
 		sessions:     make(map[string]*JSIPSession),
 		transactions: make(map[string]*JSIPTrasaction),
 	}
@@ -1639,6 +1645,10 @@ func (stack *JSIPStack) Prefix() string {
 
 func (stack *JSIPStack) Suffix() string {
 	return ""
+}
+
+func (stack *JSIPStack) LogLevel() int {
+	return stack.logLevel
 }
 
 func RecvJSIPTerm(dlg string) {

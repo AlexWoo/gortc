@@ -15,7 +15,8 @@ type RTCLogHandle struct {
 }
 
 type logctx struct {
-	log *golib.Log
+	logLevel int
+	log      *golib.Log
 }
 
 func (ctx *logctx) Prefix() string {
@@ -26,14 +27,19 @@ func (ctx *logctx) Suffix() string {
 	return ""
 }
 
+func (ctx *logctx) LogLevel() int {
+	return ctx.logLevel
+}
+
 var apilogCtx *logctx
 
 func initLog(config *APIModuleConfig) {
-	logPath := module.rtcpath + "/logs/api.log"
+	logPath := module.rtcpath + config.LogFile
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	apilogCtx = &logctx{
-		log: golib.NewLog(logPath, logLevel),
+		logLevel: logLevel,
+		log:      golib.NewLog(logPath),
 	}
 
 	if apilogCtx.log == nil {

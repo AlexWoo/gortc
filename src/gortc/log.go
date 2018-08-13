@@ -12,7 +12,8 @@ import (
 )
 
 type logctx struct {
-	log *golib.Log
+	logLevel int
+	log      *golib.Log
 }
 
 func (ctx *logctx) Prefix() string {
@@ -23,15 +24,21 @@ func (ctx *logctx) Suffix() string {
 	return ""
 }
 
+func (ctx *logctx) LogLevel() int {
+	return ctx.logLevel
+}
+
 var mainlogCtx *logctx
 
 func initLog() {
-	logPath := rtcpath + "/logs/error.log"
+	logPath := rtcpath + config.LogFile
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	mainlogCtx = &logctx{
-		log: golib.NewLog(logPath, logLevel),
+		logLevel: logLevel,
+		log:      golib.NewLog(logPath),
 	}
+
 	if mainlogCtx.log == nil {
 		os.Exit(1)
 	}

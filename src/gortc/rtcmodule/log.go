@@ -12,7 +12,8 @@ import (
 )
 
 type logctx struct {
-	log *golib.Log
+	logLevel int
+	log      *golib.Log
 }
 
 func (ctx *logctx) Prefix() string {
@@ -23,14 +24,19 @@ func (ctx *logctx) Suffix() string {
 	return ""
 }
 
+func (ctx *logctx) LogLevel() int {
+	return ctx.logLevel
+}
+
 var rtclogCtx *logctx
 
 func initLog(config *RTCModuleConfig) {
-	logPath := module.rtcpath + "/logs/rtc.log"
+	logPath := module.rtcpath + config.LogFile
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	rtclogCtx = &logctx{
-		log: golib.NewLog(logPath, logLevel),
+		logLevel: logLevel,
+		log:      golib.NewLog(logPath),
 	}
 
 	if rtclogCtx.log == nil {

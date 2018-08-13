@@ -29,13 +29,14 @@ func GetGID() uint64 {
 }
 
 type MainConfig struct {
-	LogLevel string
+	LogFile  string `default:"/logs/rtc.log"`
+	LogLevel string `default:"info"`
 }
 
 var (
 	config  *MainConfig
 	signals chan os.Signal
-	rtcpath = "/usr/local/gortc"
+	rtcpath = "/usr/local/gortc/"
 )
 
 func loadConfig() {

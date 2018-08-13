@@ -12,7 +12,8 @@ import (
 )
 
 type APIModuleConfig struct {
-	LogLevel  string
+	LogFile   string `default:"/logs/rtc.log"`
+	LogLevel  string `default:"info"`
 	Listen    string
 	TlsListen string
 	Cert      string
