@@ -4,11 +4,13 @@
 
 package rtclib
 
+import "github.com/alexwoo/golib"
+
 var RTCPATH string
 
 type Module interface {
 	LoadConfig() bool
-	Init() bool
+	Init(log *golib.Log) bool
 	Run()
 	Exit()
 }

@@ -14,7 +14,7 @@ import (
 )
 
 type RTCModuleConfig struct {
-	LogFile   string `default:"/logs/rtc.log"`
+	LogFile   string
 	LogLevel  string `default:"info"`
 	Listen    string
 	TlsListen string
@@ -87,8 +87,8 @@ func (m *RTCModule) handler(w http.ResponseWriter, req *http.Request) {
 	conn.Accept()
 }
 
-func (m *RTCModule) Init() bool {
-	initLog(m.config)
+func (m *RTCModule) Init(log *golib.Log) bool {
+	initLog(m.config, log)
 
 	if !initSLPM() {
 		LogError("SLP Manager init error")

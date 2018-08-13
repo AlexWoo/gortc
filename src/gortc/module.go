@@ -20,7 +20,7 @@ func initModule() {
 			LogFatal("Module %s load config failed", name)
 		}
 
-		if !modules[name].Init() {
+		if !modules[name].Init(mainlogCtx.log) {
 			LogFatal("Module %s init failed", name)
 		}
 

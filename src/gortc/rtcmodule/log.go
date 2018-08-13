@@ -30,13 +30,24 @@ func (ctx *logctx) LogLevel() int {
 
 var rtclogCtx *logctx
 
-func initLog(config *RTCModuleConfig) {
-	logPath := module.rtcpath + config.LogFile
+func initLog(config *RTCModuleConfig, log *golib.Log) {
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	rtclogCtx = &logctx{
-		logLevel: logLevel,
-		log:      golib.NewLog(logPath),
+	var logFile string
+	if config.LogFile != "" {
+		logFile = module.rtcpath + config.LogFile
+	}
+
+	if logFile == "" || logFile == log.LogPath() {
+		rtclogCtx = &logctx{
+			logLevel: logLevel,
+			log:      log,
+		}
+	} else {
+		rtclogCtx = &logctx{
+			logLevel: logLevel,
+			log:      golib.NewLog(logFile),
+		}
 	}
 
 	if rtclogCtx.log == nil {

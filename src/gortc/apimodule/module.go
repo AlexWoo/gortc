@@ -12,7 +12,7 @@ import (
 )
 
 type APIModuleConfig struct {
-	LogFile   string `default:"/logs/rtc.log"`
+	LogFile   string
 	LogLevel  string `default:"info"`
 	Listen    string
 	TlsListen string
@@ -50,8 +50,8 @@ func (m *APIModule) LoadConfig() bool {
 	return true
 }
 
-func (m *APIModule) Init() bool {
-	initLog(m.config)
+func (m *APIModule) Init(log *golib.Log) bool {
+	initLog(m.config, log)
 
 	if !initAPIM() {
 		LogError("init API Manager failed")

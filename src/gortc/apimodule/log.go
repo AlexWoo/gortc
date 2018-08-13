@@ -33,13 +33,24 @@ func (ctx *logctx) LogLevel() int {
 
 var apilogCtx *logctx
 
-func initLog(config *APIModuleConfig) {
-	logPath := module.rtcpath + config.LogFile
+func initLog(config *APIModuleConfig, log *golib.Log) {
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	apilogCtx = &logctx{
-		logLevel: logLevel,
-		log:      golib.NewLog(logPath),
+	var logFile string
+	if config.LogFile != "" {
+		logFile = module.rtcpath + config.LogFile
+	}
+
+	if logFile == "" || logFile == log.LogPath() {
+		apilogCtx = &logctx{
+			logLevel: logLevel,
+			log:      log,
+		}
+	} else {
+		apilogCtx = &logctx{
+			logLevel: logLevel,
+			log:      golib.NewLog(logFile),
+		}
 	}
 
 	if apilogCtx.log == nil {
