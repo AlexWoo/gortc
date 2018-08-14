@@ -78,7 +78,7 @@ func slpLoad(name string, slpFile string) bool {
 	slpm.slps[name] = slp
 
 	// SLP Init Process when loaded
-	t := rtclib.NewTask("", module.taskQ)
+	t := rtclib.NewTask("", module.taskQ, rtclogCtx.log, rtclogCtx.logLevel)
 	t.Name = name
 	getSLP(t, SLPONLOAD)
 	if t.SLP == nil {

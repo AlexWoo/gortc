@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/alexwoo/golib"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -31,6 +32,9 @@ type Task struct {
 	taskq chan *Task
 	quitC chan bool
 	quit  bool
+
+	log      *golib.Log
+	logLevel int
 
 	Process func(jsip *JSIP)
 }
@@ -113,11 +117,13 @@ func GetTask(dlg string) *Task {
 	return tasks[dlg]
 }
 
-func NewTask(dlg string, taskq chan *Task) *Task {
+func NewTask(dlg string, taskq chan *Task, log *golib.Log, logLevel int) *Task {
 	t := &Task{
-		msgs:  make(chan *JSIP, 1024),
-		taskq: taskq,
-		quitC: make(chan bool, 1),
+		msgs:     make(chan *JSIP, 1024),
+		taskq:    taskq,
+		quitC:    make(chan bool, 1),
+		log:      log,
+		logLevel: logLevel,
 	}
 
 	t.SetDlg(dlg)
@@ -125,4 +131,36 @@ func NewTask(dlg string, taskq chan *Task) *Task {
 	go t.run()
 
 	return t
+}
+
+func (t *Task) Prefix() string {
+	return "[SLP]"
+}
+
+func (t *Task) Suffix() string {
+	suf := ", " + t.Name
+	if t.SLP != nil {
+		suf += fmt.Sprintf(" %p", t.SLP)
+	}
+	return suf
+}
+
+func (t *Task) LogLevel() int {
+	return t.logLevel
+}
+
+func (t *Task) LogDebug(format string, v ...interface{}) {
+	t.log.LogDebug(t, format, v...)
+}
+
+func (t *Task) LogInfo(format string, v ...interface{}) {
+	t.log.LogInfo(t, format, v...)
+}
+
+func (t *Task) LogError(format string, v ...interface{}) {
+	t.log.LogError(t, format, v...)
+}
+
+func (t *Task) LogFatal(format string, v ...interface{}) {
+	t.log.LogFatal(t, format, v...)
 }

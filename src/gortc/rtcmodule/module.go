@@ -191,7 +191,7 @@ func (m *RTCModule) processMsg(jsip *rtclib.JSIP) {
 		}
 	}
 
-	t = rtclib.NewTask(dlg, m.taskQ)
+	t = rtclib.NewTask(dlg, m.taskQ, rtclogCtx.log, rtclogCtx.logLevel)
 	t.Name = slpname
 	getSLP(t, SLPPROCESS)
 	if t.SLP == nil {
