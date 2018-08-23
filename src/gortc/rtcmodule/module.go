@@ -95,8 +95,6 @@ func (m *RTCModule) Init(log *golib.Log) bool {
 		return false
 	}
 
-	rtclib.RTCPATH = m.rtcpath
-
 	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
 

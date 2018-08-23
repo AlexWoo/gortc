@@ -11,6 +11,7 @@ import (
 	"gortc/rtcmodule"
 	"os"
 	"os/signal"
+	"rtclib"
 	"runtime"
 	"strconv"
 	"syscall"
@@ -101,6 +102,7 @@ func mainloop() {
 }
 
 func init() {
+	rtclib.RTCPATH = rtcpath
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	addModule("apimodule", apimodule.NewAPIModule(rtcpath))
 	addModule("rtcmodule", rtcmodule.NewRTCModule(rtcpath))

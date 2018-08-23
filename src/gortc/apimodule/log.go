@@ -6,6 +6,7 @@ package apimodule
 
 import (
 	"os"
+	"rtclib"
 	"strconv"
 
 	"github.com/alexwoo/golib"
@@ -36,10 +37,7 @@ var apilogCtx *logctx
 func initLog(config *APIModuleConfig, log *golib.Log) {
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	var logFile string
-	if config.LogFile != "" {
-		logFile = module.rtcpath + config.LogFile
-	}
+	logFile := rtclib.FullPath(config.LogFile)
 
 	if logFile == "" || logFile == log.LogPath() {
 		apilogCtx = &logctx{

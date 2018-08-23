@@ -4,7 +4,11 @@
 
 package rtclib
 
-import "github.com/alexwoo/golib"
+import (
+	"strings"
+
+	"github.com/alexwoo/golib"
+)
 
 var RTCPATH string
 
@@ -13,4 +17,20 @@ type Module interface {
 	Init(log *golib.Log) bool
 	Run()
 	Exit()
+}
+
+func FullPath(path string) string {
+	if path == "" {
+		return path
+	}
+
+	if strings.HasSuffix(path, "/") {
+		return path
+	}
+
+	if strings.HasSuffix(RTCPATH, "/") {
+		return RTCPATH + path
+	} else {
+		return RTCPATH + "/" + path
+	}
 }

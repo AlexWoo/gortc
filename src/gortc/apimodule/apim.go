@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"plugin"
+	"rtclib"
 
 	"github.com/tidwall/gjson"
 )
@@ -87,8 +88,8 @@ func apiLoad(name string, apiFile string) bool {
 }
 
 func initAPIM() bool {
-	apim.apiconf = module.rtcpath + "/conf/.apis"
-	apim.apidir = module.rtcpath + "/api/"
+	apim.apiconf = rtclib.FullPath("conf/.apis")
+	apim.apidir = rtclib.FullPath("api/")
 
 	f, err := os.Open(apim.apiconf)
 	defer f.Close()

@@ -5,45 +5,46 @@
 package apimodule
 
 import (
-	"net/http"
-	"os"
+	"fmt"
+	"rtclib"
+	"time"
 
 	"github.com/alexwoo/golib"
 )
 
 type APIModuleConfig struct {
-	LogFile   string
-	LogLevel  string `default:"info"`
-	Listen    string
-	TlsListen string
-	Cert      string
-	Key       string
+	LogFile             string
+	LogLevel            string `default:"info"`
+	Listen              string
+	TlsListen           string
+	Cert                string
+	Key                 string
+	ClientHeaderTimeout time.Duration `default:"10s"`
+	Keepalived          time.Duration `default:"60s"`
+	AccessFile          string        `default:"logs/access.log"`
 }
 
 type APIModule struct {
-	rtcpath   string
 	config    *APIModuleConfig
-	server    *http.Server
-	tlsServer *http.Server
+	server    *golib.HTTPServer
+	tlsServer *golib.HTTPServer
 }
 
 var module *APIModule
 
 func NewAPIModule(rtcpath string) *APIModule {
-	module = &APIModule{
-		rtcpath: rtcpath,
-	}
+	module = &APIModule{}
 
 	return module
 }
 
 func (m *APIModule) LoadConfig() bool {
 	m.config = new(APIModuleConfig)
-	confPath := m.rtcpath + "/conf/gortc.ini"
+	confPath := rtclib.FullPath("conf/gortc.ini")
 
 	err := golib.ConfigFile(confPath, "APIModule", m.config)
 	if err != nil {
-		LogError("Parse config %s error: %v", confPath, err)
+		fmt.Printf("Parse config %s error: %v\n", confPath, err)
 		return false
 	}
 
@@ -58,11 +59,18 @@ func (m *APIModule) Init(log *golib.Log) bool {
 		return false
 	}
 
-	serveMux := &http.ServeMux{}
-	serveMux.HandleFunc("/", handler)
+	m.config.AccessFile = rtclib.FullPath(m.config.AccessFile)
 
 	if m.config.Listen != "" {
-		m.server = &http.Server{Addr: m.config.Listen, Handler: serveMux}
+		s, err := golib.NewHTTPServer(m.config.Listen, "", "", "/",
+			m.config.ClientHeaderTimeout, m.config.Keepalived, apilogCtx.log,
+			handler, m.config.AccessFile)
+		if err != nil {
+			LogError("New API Server error: %s", err)
+			return false
+		}
+
+		m.server = s
 	}
 
 	if m.config.TlsListen != "" {
@@ -72,23 +80,18 @@ func (m *APIModule) Init(log *golib.Log) bool {
 			return false
 		}
 
-		m.config.Cert = m.rtcpath + "/certs/" + m.config.Cert
+		m.config.Cert = rtclib.FullPath("certs/" + m.config.Cert)
+		m.config.Key = rtclib.FullPath("certs/" + m.config.Key)
 
-		_, err := os.Stat(m.config.Cert)
+		s, err := golib.NewHTTPServer(m.config.Listen, m.config.Cert,
+			m.config.Key, "/", m.config.ClientHeaderTimeout,
+			m.config.Keepalived, apilogCtx.log, handler, m.config.AccessFile)
 		if err != nil {
-			LogError("TLS cert(%s) error: %v", m.config.Cert, err)
+			LogError("New API TLSServer error: %s", err)
 			return false
 		}
 
-		m.config.Key = m.rtcpath + "/certs/" + m.config.Key
-
-		_, err = os.Stat(m.config.Key)
-		if err != nil {
-			LogError("TLS cert(%s) error: %v", m.config.Key, err)
-			return false
-		}
-
-		m.tlsServer = &http.Server{Addr: m.config.TlsListen, Handler: serveMux}
+		m.tlsServer = s
 	}
 
 	return true
@@ -108,7 +111,7 @@ func (m *APIModule) Run() {
 		LogInfo("APIServer start ...")
 		go func() {
 			// TODO retry
-			err := m.server.ListenAndServe()
+			err := m.server.Start()
 			LogError("APIServer quit, %v", err)
 			quit <- true
 		}()
@@ -117,7 +120,7 @@ func (m *APIModule) Run() {
 	if m.tlsServer != nil {
 		LogInfo("APIServer TLS start ...")
 		go func() {
-			err := m.tlsServer.ListenAndServeTLS(m.config.Cert, m.config.Key)
+			err := m.tlsServer.Start()
 			LogError("APIServer TLS quit, %v", err)
 			quit <- true
 		}()
