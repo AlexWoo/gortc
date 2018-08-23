@@ -6,6 +6,7 @@ package rtcmodule
 
 import (
 	"os"
+	"rtclib"
 	"strconv"
 
 	"github.com/alexwoo/golib"
@@ -33,10 +34,7 @@ var rtclogCtx *logctx
 func initLog(config *RTCModuleConfig, log *golib.Log) {
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
-	var logFile string
-	if config.LogFile != "" {
-		logFile = module.rtcpath + config.LogFile
-	}
+	logFile := rtclib.FullPath(config.LogFile)
 
 	if logFile == "" || logFile == log.LogPath() {
 		rtclogCtx = &logctx{
