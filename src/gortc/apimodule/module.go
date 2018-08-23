@@ -32,7 +32,7 @@ type APIModule struct {
 
 var module *APIModule
 
-func NewAPIModule(rtcpath string) *APIModule {
+func NewAPIModule() *APIModule {
 	module = &APIModule{}
 
 	return module

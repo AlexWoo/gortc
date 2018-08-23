@@ -27,8 +27,6 @@ type RTCModuleConfig struct {
 }
 
 type RTCModule struct {
-	rtcpath string
-
 	config    *RTCModuleConfig
 	server    *golib.HTTPServer
 	tlsServer *golib.HTTPServer
@@ -40,10 +38,8 @@ type RTCModule struct {
 
 var module *RTCModule
 
-func NewRTCModule(rtcpath string) *RTCModule {
-	module = &RTCModule{
-		rtcpath: rtcpath,
-	}
+func NewRTCModule() *RTCModule {
+	module = &RTCModule{}
 
 	return module
 }
@@ -103,8 +99,7 @@ func (m *RTCModule) Init(log *golib.Log) bool {
 	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
 
-	m.jstack = rtclib.InitJSIPStack(m.jsipC, rtclogCtx.log, rtclogCtx.logLevel,
-		m.rtcpath)
+	m.jstack = rtclib.InitJSIPStack(m.jsipC, rtclogCtx.log, rtclogCtx.logLevel)
 	if m.jstack == nil {
 		LogError("JSIP Stack init error")
 		return false

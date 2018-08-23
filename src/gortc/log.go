@@ -6,6 +6,7 @@ package main
 
 import (
 	"os"
+	"rtclib"
 	"strconv"
 
 	"github.com/alexwoo/golib"
@@ -31,7 +32,7 @@ func (ctx *logctx) LogLevel() int {
 var mainlogCtx *logctx
 
 func initLog() {
-	logPath := rtcpath + config.LogFile
+	logPath := rtclib.FullPath(config.LogFile)
 	logLevel := golib.LoglvEnum.ConfEnum(config.LogLevel, golib.LOGINFO)
 
 	mainlogCtx = &logctx{

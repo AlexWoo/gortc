@@ -1593,11 +1593,10 @@ func (stack *JSIPStack) run() {
 }
 
 // Init JSIP Stack
-func InitJSIPStack(jsipC chan *JSIP, log *golib.Log, logLevel int,
-	rtcpath string) *JSIPStack {
+func InitJSIPStack(jsipC chan *JSIP, log *golib.Log, logLevel int) *JSIPStack {
 
 	jstack = &JSIPStack{
-		confPath:     rtcpath + "/conf/gortc.ini",
+		confPath:     FullPath("conf/gortc.ini"),
 		jsipC:        jsipC,
 		log:          log,
 		logLevel:     logLevel,

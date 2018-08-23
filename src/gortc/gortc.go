@@ -41,7 +41,7 @@ var (
 )
 
 func loadConfig() {
-	confPath := rtcpath + "/conf/gortc.ini"
+	confPath := rtclib.FullPath("conf/gortc.ini")
 	config = new(MainConfig)
 
 	err := golib.ConfigFile(confPath, "", config)
@@ -104,8 +104,8 @@ func mainloop() {
 func init() {
 	rtclib.RTCPATH = rtcpath
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	addModule("apimodule", apimodule.NewAPIModule(rtcpath))
-	addModule("rtcmodule", rtcmodule.NewRTCModule(rtcpath))
+	addModule("apimodule", apimodule.NewAPIModule())
+	addModule("rtcmodule", rtcmodule.NewRTCModule())
 }
 
 func main() {
