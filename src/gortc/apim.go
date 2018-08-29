@@ -2,13 +2,12 @@
 //
 // API manager
 
-package apimodule
+package main
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"plugin"
 	"rtclib"
@@ -16,19 +15,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type API interface {
-	Get(req *http.Request, paras string) (int,
-		*map[string]string, interface{}, *map[int]RespCode)
-	Post(req *http.Request, paras string) (int,
-		*map[string]string, interface{}, *map[int]RespCode)
-	Delete(req *http.Request, paras string) (int,
-		*map[string]string, interface{}, *map[int]RespCode)
-}
-
 type apiPlugin struct {
 	name     string
 	file     string
-	instance func() API
+	instance func() rtclib.API
 }
 
 type APIM struct {
@@ -43,7 +33,7 @@ var apim = &APIM{
 	plugins: make(map[string]string),
 }
 
-func AddInternalAPI(name string, instance func() API) {
+func addInternalAPI(name string, instance func() rtclib.API) {
 	p := &apiPlugin{
 		name:     name,
 		instance: instance,
@@ -61,19 +51,19 @@ func apiLoad(name string, apiFile string) bool {
 
 	p, err := plugin.Open(path)
 	if err != nil {
-		LogError("open api plugin error: %v", err)
+		apis.LogError("open api plugin error: %v", err)
 		return false
 	}
 
 	v, err := p.Lookup("APIInstance")
 	if err != nil {
-		LogError("find api plugin entry error: %v", err)
+		apis.LogError("find api plugin entry error: %v", err)
 		return false
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			LogError("load %s %s failed: %v", name, path, err)
+			apis.LogError("load %s %s failed: %v", name, path, err)
 			if apim.plugins[name] == "" {
 				delete(apim.plugins, name)
 				updateAPIFile()
@@ -81,7 +71,7 @@ func apiLoad(name string, apiFile string) bool {
 		}
 	}()
 
-	api.instance = v.(func() API)
+	api.instance = v.(func() rtclib.API)
 	apim.apis[name] = api
 
 	return true
@@ -94,26 +84,26 @@ func initAPIM() bool {
 	f, err := os.Open(apim.apiconf)
 	defer f.Close()
 	if err != nil {
-		LogError("open file %s failed: %v", apim.apiconf, err)
+		apis.LogError("open file %s failed: %v", apim.apiconf, err)
 		return false
 	}
 
 	json, _ := ioutil.ReadAll(f)
 	if !gjson.ValidBytes(json) {
-		LogError("parse file %s failed: %v", apim.apiconf, err)
+		apis.LogError("parse file %s failed: %v", apim.apiconf, err)
 		return false
 	}
 
 	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
 	if !ok {
-		LogError("api file %s format error: %v", apim.apiconf, err)
+		apis.LogError("api file %s format error: %v", apim.apiconf, err)
 		return false
 	}
 
 	for name, v := range j {
 		path, ok := v.(string)
 		if !ok {
-			LogError("api %s format error: %v", name, err)
+			apis.LogError("api %s format error: %v", name, err)
 			return false
 		}
 
@@ -123,7 +113,7 @@ func initAPIM() bool {
 		apim.plugins[name] = path
 	}
 
-	AddInternalAPI("apim.v1", Apimv1)
+	addInternalAPI("apim.v1", Apimv1)
 
 	return true
 }
@@ -178,7 +168,7 @@ func delAPI(name string) string {
 	return fmt.Sprintf("Delete API %s successd\n", name)
 }
 
-func getAPI(name string) API {
+func getAPI(name string) rtclib.API {
 	p := apim.apis[name]
 	if p == nil {
 		return nil

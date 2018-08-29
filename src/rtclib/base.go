@@ -5,19 +5,27 @@
 package rtclib
 
 import (
+	"net/http"
 	"strings"
-
-	"github.com/alexwoo/golib"
 )
 
-var RTCPATH string
-
-type Module interface {
-	LoadConfig() bool
-	Init(log *golib.Log) bool
-	Run()
-	Exit()
+// API Reponse Code
+type RespCode struct {
+	Status int
+	Msg    string
 }
+
+// API interface
+type API interface {
+	Get(req *http.Request, paras string) (int,
+		*map[string]string, interface{}, *map[int]RespCode)
+	Post(req *http.Request, paras string) (int,
+		*map[string]string, interface{}, *map[int]RespCode)
+	Delete(req *http.Request, paras string) (int,
+		*map[string]string, interface{}, *map[int]RespCode)
+}
+
+var RTCPATH string
 
 func FullPath(path string) string {
 	if path == "" {

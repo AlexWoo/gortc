@@ -5,15 +5,15 @@
 package main
 
 import (
-	"gortc/apimodule"
 	"net/http"
+	"rtclib"
 	"runtime"
 )
 
 type RUNTIME_V1 struct {
 }
 
-func RunTimeV1() apimodule.API {
+func RunTimeV1() rtclib.API {
 	return &RUNTIME_V1{}
 }
 
@@ -34,7 +34,7 @@ func stack() string {
 }
 
 func (api *RUNTIME_V1) Get(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	switch paras {
 	case "stack":
@@ -44,13 +44,13 @@ func (api *RUNTIME_V1) Get(req *http.Request, paras string) (int,
 }
 
 func (api *RUNTIME_V1) Post(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return 2, nil, nil, nil
 }
 
 func (api *RUNTIME_V1) Delete(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return 2, nil, nil, nil
 }

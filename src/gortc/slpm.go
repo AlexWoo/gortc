@@ -2,12 +2,11 @@
 //
 // RTC Service Logical Processor manager
 
-package rtcmodule
+package main
 
 import (
 	"encoding/json"
 	"fmt"
-	"gortc/apimodule"
 	"io/ioutil"
 	"os"
 	"plugin"
@@ -54,19 +53,19 @@ func slpLoad(name string, slpFile string) bool {
 
 	p, err := plugin.Open(path)
 	if err != nil {
-		LogError("open slp plugin error: %v", err)
+		rtcs.LogError("open slp plugin error: %v", err)
 		return false
 	}
 
 	v, err := p.Lookup("GetInstance")
 	if err != nil {
-		LogError("find slp plugin entry error: %v", err)
+		rtcs.LogError("find slp plugin entry error: %v", err)
 		return false
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			LogError("load %s %s failed: %v", name, path, err)
+			rtcs.LogError("load %s %s failed: %v", name, path, err)
 			if slpm.plugins[name] == "" {
 				delete(slpm.plugins, name)
 				updateSLPFile()
@@ -78,7 +77,7 @@ func slpLoad(name string, slpFile string) bool {
 	slpm.slps[name] = slp
 
 	// SLP Init Process when loaded
-	t := rtclib.NewTask("", module.taskQ, rtclogCtx.log, rtclogCtx.logLevel)
+	t := rtclib.NewTask("", rtcs.taskQ, rtcs.log, rtcs.logLevel)
 	t.Name = name
 	getSLP(t, SLPONLOAD)
 	if t.SLP == nil {
@@ -97,26 +96,26 @@ func initSLPM() bool {
 	f, err := os.Open(slpm.slpconf)
 	defer f.Close()
 	if err != nil {
-		LogError("open file %s failed: %v", slpm.slpconf, err)
+		rtcs.LogError("open file %s failed: %v", slpm.slpconf, err)
 		return false
 	}
 
 	json, _ := ioutil.ReadAll(f)
 	if !gjson.ValidBytes(json) {
-		LogError("parse file %s failed: %v", slpm.slpconf, err)
+		rtcs.LogError("parse file %s failed: %v", slpm.slpconf, err)
 		return false
 	}
 
 	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
 	if !ok {
-		LogError("slp file %s format error: %v", slpm.slpconf, err)
+		rtcs.LogError("slp file %s format error: %v", slpm.slpconf, err)
 		return false
 	}
 
 	for name, v := range j {
 		path, ok := v.(string)
 		if !ok {
-			LogError("slp %s format error: %v", name, err)
+			rtcs.LogError("slp %s format error: %v", name, err)
 			return false
 		}
 
@@ -126,7 +125,7 @@ func initSLPM() bool {
 		slpm.plugins[name] = path
 	}
 
-	apimodule.AddInternalAPI("slpm.v1", Slpmv1)
+	addInternalAPI("slpm.v1", Slpmv1)
 
 	return true
 }
@@ -180,14 +179,14 @@ func delSLP(name string) string {
 func getSLP(t *rtclib.Task, stage int) {
 	p := slpm.slps[t.Name]
 	if p == nil {
-		LogError("SLP %s not exist", t.Name)
+		rtcs.LogError("SLP %s not exist", t.Name)
 		return
 	}
 	p.using++
 
 	t.SLP = p.instance(t)
 	if t.SLP == nil {
-		LogError("get slp error")
+		rtcs.LogError("get slp error")
 		return
 	}
 

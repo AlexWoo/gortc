@@ -2,27 +2,28 @@
 //
 // API manager V1
 
-package apimodule
+package main
 
 import (
 	"net/http"
+	"rtclib"
 )
 
 type APIM_V1 struct {
 }
 
-func Apimv1() API {
+func Apimv1() rtclib.API {
 	return &APIM_V1{}
 }
 
 func (api *APIM_V1) Get(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return -1, nil, listAPI(), nil
 }
 
 func (api *APIM_V1) Post(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	apiname := paras
 	filename := req.URL.Query().Get("file")
@@ -31,7 +32,7 @@ func (api *APIM_V1) Post(req *http.Request, paras string) (int,
 }
 
 func (api *APIM_V1) Delete(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return -1, nil, delAPI(paras), nil
 }

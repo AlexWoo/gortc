@@ -2,16 +2,17 @@
 //
 // API Response
 
-package apimodule
+package main
 
 import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"rtclib"
 	"strings"
 )
 
-var syscode = map[int]RespCode{
+var syscode = map[int]rtclib.RespCode{
 	-1: {Status: 200, Msg: ""},
 	0:  {Status: 200, Msg: "OK"},
 	1:  {Status: 404, Msg: "Invalid uri format"},
@@ -22,22 +23,17 @@ var syscode = map[int]RespCode{
 	6:  {Status: 500, Msg: "Unsuppoted ret body"},
 }
 
-type RespCode struct {
-	Status int
-	Msg    string
-}
-
-type Response struct {
+type response struct {
 	status  int
 	headers map[string]string
 	body    map[string]interface{}
 }
 
-func NewResponse(code int, headers *map[string]string, body interface{},
-	usercode *map[int]RespCode) *Response {
+func newResponse(code int, headers *map[string]string, body interface{},
+	usercode *map[int]rtclib.RespCode) *response {
 
 	// respcode
-	var c RespCode
+	var c rtclib.RespCode
 	ok := false
 	if usercode != nil { /* usercode set */
 		c, ok = (*usercode)[code]
@@ -46,11 +42,11 @@ func NewResponse(code int, headers *map[string]string, body interface{},
 		c, ok = syscode[code]
 	}
 	if !ok {
-		return NewResponse(4, nil, nil, nil)
+		return newResponse(4, nil, nil, nil)
 	}
 
 	// init resp
-	resp := &Response{
+	resp := &response{
 		status:  c.Status,
 		headers: make(map[string]string),
 		body:    make(map[string]interface{}),
@@ -72,7 +68,7 @@ func NewResponse(code int, headers *map[string]string, body interface{},
 	return resp
 }
 
-func (resp *Response) setBody(code int, msg string, body interface{}) {
+func (resp *response) setBody(code int, msg string, body interface{}) {
 	resp.body["code"] = code
 	resp.body["msg"] = msg
 
@@ -115,7 +111,7 @@ func (resp *Response) setBody(code int, msg string, body interface{}) {
 	return
 }
 
-func (resp *Response) SendResp(w http.ResponseWriter) {
+func (resp *response) sendResp(w http.ResponseWriter) {
 	// resp headers
 	for h, v := range resp.headers {
 		w.Header().Set(h, v)

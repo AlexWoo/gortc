@@ -2,28 +2,28 @@
 //
 // RTC SLP manager V1
 
-package rtcmodule
+package main
 
 import (
-	"gortc/apimodule"
 	"net/http"
+	"rtclib"
 )
 
 type SLPM_V1 struct {
 }
 
-func Slpmv1() apimodule.API {
+func Slpmv1() rtclib.API {
 	return &SLPM_V1{}
 }
 
 func (api *SLPM_V1) Get(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return -1, nil, listSLP(), nil
 }
 
 func (api *SLPM_V1) Post(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	apiname := paras
 	filename := req.URL.Query().Get("file")
@@ -32,7 +32,7 @@ func (api *SLPM_V1) Post(req *http.Request, paras string) (int,
 }
 
 func (api *SLPM_V1) Delete(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]apimodule.RespCode) {
+	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	return -1, nil, delSLP(paras), nil
 }
