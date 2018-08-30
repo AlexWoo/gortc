@@ -73,7 +73,7 @@ func (m *mainModule) Init() error {
 }
 
 func (m *mainModule) PreMainloop() error {
-	addInternalAPI("runtime.v1", RunTimeV1)
+	am.addInternalAPI("runtime.v1", RunTimeV1)
 
 	return nil
 }

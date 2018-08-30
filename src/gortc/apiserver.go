@@ -106,7 +106,7 @@ func (m *apiServer) callAPI(req *http.Request, apiname string, version string,
 	paras string) (int, *map[string]string, interface{},
 	*map[int]rtclib.RespCode) {
 
-	api := getAPI(apiname + "." + version)
+	api := am.getAPI(apiname + "." + version)
 	if api == nil {
 		return 3, nil, nil, nil
 	}
@@ -152,10 +152,6 @@ func (m *apiServer) PreInit() error {
 }
 
 func (m *apiServer) Init() error {
-	if !initAPIM() {
-		return fmt.Errorf("init API Manager failed")
-	}
-
 	accessFile := rtclib.FullPath(m.dconfig.AccessFile)
 
 	if m.config.Listen != "" {

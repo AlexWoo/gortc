@@ -19,7 +19,7 @@ func Apimv1() rtclib.API {
 func (api *APIM_V1) Get(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, listAPI(), nil
+	return -1, nil, am.listAPI(), nil
 }
 
 func (api *APIM_V1) Post(req *http.Request, paras string) (int,
@@ -28,11 +28,11 @@ func (api *APIM_V1) Post(req *http.Request, paras string) (int,
 	apiname := paras
 	filename := req.URL.Query().Get("file")
 
-	return -1, nil, addAPI(apiname, filename), nil
+	return -1, nil, am.addAPI(apiname, filename), nil
 }
 
 func (api *APIM_V1) Delete(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, delAPI(paras), nil
+	return -1, nil, am.delAPI(paras), nil
 }

@@ -125,7 +125,7 @@ func initSLPM() bool {
 		slpm.plugins[name] = path
 	}
 
-	addInternalAPI("slpm.v1", Slpmv1)
+	am.addInternalAPI("slpm.v1", Slpmv1)
 
 	return true
 }

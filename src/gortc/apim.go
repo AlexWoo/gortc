@@ -21,155 +21,185 @@ type apiPlugin struct {
 	instance func() rtclib.API
 }
 
-type APIM struct {
+type apim struct {
 	apis    map[string]*apiPlugin
 	apiconf string
 	apidir  string
 	plugins map[string]string
 }
 
-var apim = &APIM{
-	apis:    make(map[string]*apiPlugin),
-	plugins: make(map[string]string),
+var am *apim
+
+func apimInstance() *apim {
+	if am != nil {
+		return am
+	}
+
+	am = &apim{
+		apis:    make(map[string]*apiPlugin),
+		plugins: make(map[string]string),
+	}
+
+	return am
 }
 
-func addInternalAPI(name string, instance func() rtclib.API) {
-	p := &apiPlugin{
-		name:     name,
-		instance: instance,
-	}
+// for module interface
 
-	apim.apis[name] = p
+func (m *apim) PreInit() error {
+	return nil
 }
 
-func apiLoad(name string, apiFile string) bool {
-	api := &apiPlugin{
-		name: name,
-		file: apiFile,
-	}
-	path := apim.apidir + apiFile
+func (m *apim) Init() error {
+	m.apiconf = rtclib.FullPath("conf/.apis")
+	m.apidir = rtclib.FullPath("api/")
 
-	p, err := plugin.Open(path)
-	if err != nil {
-		apis.LogError("open api plugin error: %v", err)
-		return false
-	}
-
-	v, err := p.Lookup("APIInstance")
-	if err != nil {
-		apis.LogError("find api plugin entry error: %v", err)
-		return false
-	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			apis.LogError("load %s %s failed: %v", name, path, err)
-			if apim.plugins[name] == "" {
-				delete(apim.plugins, name)
-				updateAPIFile()
-			}
-		}
-	}()
-
-	api.instance = v.(func() rtclib.API)
-	apim.apis[name] = api
-
-	return true
-}
-
-func initAPIM() bool {
-	apim.apiconf = rtclib.FullPath("conf/.apis")
-	apim.apidir = rtclib.FullPath("api/")
-
-	f, err := os.Open(apim.apiconf)
+	f, err := os.Open(m.apiconf)
 	defer f.Close()
 	if err != nil {
-		apis.LogError("open file %s failed: %v", apim.apiconf, err)
-		return false
+		return fmt.Errorf("open file %s failed: %v", m.apiconf, err)
 	}
 
 	json, _ := ioutil.ReadAll(f)
 	if !gjson.ValidBytes(json) {
-		apis.LogError("parse file %s failed: %v", apim.apiconf, err)
-		return false
+		return fmt.Errorf("parse file %s failed: %v", m.apiconf, err)
 	}
 
 	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
 	if !ok {
-		apis.LogError("api file %s format error: %v", apim.apiconf, err)
-		return false
+		return fmt.Errorf("api file %s format error: %v", m.apiconf, err)
 	}
 
 	for name, v := range j {
 		path, ok := v.(string)
 		if !ok {
-			apis.LogError("api %s format error: %v", name, err)
-			return false
+			return fmt.Errorf("api %s format error: %v", name, err)
 		}
 
-		if !apiLoad(name, path) {
-			return false
+		if err := m.apiLoad(name, path); err != nil {
+			return err
 		}
-		apim.plugins[name] = path
-	}
-
-	addInternalAPI("apim.v1", Apimv1)
-
-	return true
-}
-
-func updateAPIFile() error {
-	f, err := os.OpenFile(apim.apiconf, os.O_TRUNC|os.O_WRONLY, 0644)
-	defer f.Close()
-	if err != nil {
-		return fmt.Errorf("open file %s failed: %v", apim.apiconf, err)
-	}
-
-	d, _ := json.Marshal(apim.plugins)
-
-	_, err = f.Write(d)
-	if err != nil {
-		return fmt.Errorf("write file %s failed: %v", apim.apiconf, err)
+		m.plugins[name] = path
 	}
 
 	return nil
 }
 
-func addAPI(name string, apiFile string) string {
-	if !apiLoad(name, apiFile) {
-		return fmt.Sprintf("Load API %s %s failed\n", name, apiFile)
+func (m *apim) PreMainloop() error {
+	m.addInternalAPI("apim.v1", Apimv1)
+
+	return nil
+}
+
+func (m *apim) Mainloop() {
+}
+
+func (m *apim) Reload() error {
+	return nil
+}
+
+func (m *apim) Reopen() error {
+	return nil
+}
+
+func (m *apim) Exit() {
+}
+
+// internal interalface
+
+func (m *apim) addInternalAPI(name string, instance func() rtclib.API) {
+	p := &apiPlugin{
+		name:     name,
+		instance: instance,
 	}
 
-	apim.plugins[name] = apiFile
+	m.apis[name] = p
+}
 
-	err := updateAPIFile()
+func (m *apim) updateAPIFile() error {
+	f, err := os.OpenFile(m.apiconf, os.O_TRUNC|os.O_WRONLY, 0644)
+	defer f.Close()
+	if err != nil {
+		return fmt.Errorf("open file %s failed: %v", m.apiconf, err)
+	}
+
+	d, _ := json.Marshal(m.plugins)
+
+	_, err = f.Write(d)
+	if err != nil {
+		return fmt.Errorf("write file %s failed: %v", m.apiconf, err)
+	}
+
+	return nil
+}
+
+func (m *apim) apiLoad(name string, apiFile string) error {
+	api := &apiPlugin{
+		name: name,
+		file: apiFile,
+	}
+	path := m.apidir + apiFile
+
+	p, err := plugin.Open(path)
+	if err != nil {
+		return fmt.Errorf("open api plugin error: %v", err)
+	}
+
+	v, err := p.Lookup("APIInstance")
+	if err != nil {
+		return fmt.Errorf("find api plugin entry error: %v", err)
+	}
+
+	defer func() {
+		if err := recover(); err != nil {
+			apis.LogError("load %s %s failed: %v", name, path, err)
+			if m.plugins[name] == "" {
+				delete(m.plugins, name)
+				m.updateAPIFile()
+			}
+		}
+	}()
+
+	api.instance = v.(func() rtclib.API)
+	m.apis[name] = api
+
+	return nil
+}
+
+func (m *apim) addAPI(name string, apiFile string) string {
+	if err := m.apiLoad(name, apiFile); err != nil {
+		return fmt.Sprintf("Load API %s %s failed, %v\n", name, apiFile, err)
+	}
+
+	m.plugins[name] = apiFile
+
+	err := m.updateAPIFile()
 	if err != nil {
 		return fmt.Sprintf("Update api conf file %s error: %v\n",
-			apim.apiconf, err)
+			m.apiconf, err)
 	}
 
 	return fmt.Sprintf("Load API %s %s successd\n", name, apiFile)
 }
 
-func delAPI(name string) string {
-	if apim.plugins[name] == "" {
+func (m *apim) delAPI(name string) string {
+	if m.plugins[name] == "" {
 		return fmt.Sprintf("Cannot delete api %s\n", name)
 	}
 
-	delete(apim.plugins, name)
-	delete(apim.apis, name)
+	delete(m.plugins, name)
+	delete(m.apis, name)
 
-	err := updateAPIFile()
+	err := m.updateAPIFile()
 	if err != nil {
 		return fmt.Sprintf("Update api conf file %s error: %v\n",
-			apim.apiconf, err)
+			m.apiconf, err)
 	}
 
 	return fmt.Sprintf("Delete API %s successd\n", name)
 }
 
-func getAPI(name string) rtclib.API {
-	p := apim.apis[name]
+func (m *apim) getAPI(name string) rtclib.API {
+	p := m.apis[name]
 	if p == nil {
 		return nil
 	}
@@ -177,10 +207,10 @@ func getAPI(name string) rtclib.API {
 	return p.instance()
 }
 
-func listAPI() string {
+func (m *apim) listAPI() string {
 	ret := "api\t\tfile\n"
 	ret += "------------------------------------------------------------\n"
-	for _, v := range apim.apis {
+	for _, v := range m.apis {
 		ret += fmt.Sprintf("%s\t%s\n", v.name, v.file)
 	}
 	ret += "------------------------------------------------------------\n"
