@@ -104,7 +104,7 @@ func (m *apim) Reopen() error {
 func (m *apim) Exit() {
 }
 
-// internal interalface
+// internal interface
 
 func (m *apim) addInternalAPI(name string, instance func() rtclib.API) {
 	p := &apiPlugin{

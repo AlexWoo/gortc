@@ -27,6 +27,7 @@ func main() {
 	ms.AddModule("apiserver", apiServerInstance())
 	ms.AddModule("apimanager", apimInstance())
 	ms.AddModule("rtcserver", rtcServerInstance())
+	ms.AddModule("slpmanager", slpmInstance())
 
 	ms.Start()
 }

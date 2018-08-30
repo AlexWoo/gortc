@@ -31,153 +31,184 @@ type slpPlugin struct {
 	instance func(task *rtclib.Task) rtclib.SLP
 }
 
-type SLPM struct {
+type slpm struct {
 	slps    map[string]*slpPlugin
 	slpconf string
 	slpdir  string
 	plugins map[string]string
 }
 
-var slpm = &SLPM{
-	slps:    make(map[string]*slpPlugin),
-	plugins: make(map[string]string),
+var sm *slpm
+
+func slpmInstance() *slpm {
+	if sm != nil {
+		return sm
+	}
+
+	sm = &slpm{
+		slps:    make(map[string]*slpPlugin),
+		plugins: make(map[string]string),
+	}
+
+	return sm
 }
 
-func slpLoad(name string, slpFile string) bool {
-	slp := &slpPlugin{
-		name: name,
-		file: slpFile,
-		time: time.Now(),
-	}
-	path := slpm.slpdir + slpFile
+// for module interface
 
-	p, err := plugin.Open(path)
-	if err != nil {
-		rtcs.LogError("open slp plugin error: %v", err)
-		return false
-	}
-
-	v, err := p.Lookup("GetInstance")
-	if err != nil {
-		rtcs.LogError("find slp plugin entry error: %v", err)
-		return false
-	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			rtcs.LogError("load %s %s failed: %v", name, path, err)
-			if slpm.plugins[name] == "" {
-				delete(slpm.plugins, name)
-				updateSLPFile()
-			}
-		}
-	}()
-
-	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
-	slpm.slps[name] = slp
-
-	// SLP Init Process when loaded
-	t := rtclib.NewTask("", rtcs.taskQ, rtcs.log, rtcs.logLevel)
-	t.Name = name
-	getSLP(t, SLPONLOAD)
-	if t.SLP == nil {
-		return false
-	}
-
-	t.OnMsg(nil)
-
-	return true
+func (m *slpm) PreInit() error {
+	return nil
 }
 
-func initSLPM() bool {
-	slpm.slpconf = rtclib.FullPath("conf/.slps")
-	slpm.slpdir = rtclib.FullPath("slp/")
+func (m *slpm) Init() error {
+	m.slpconf = rtclib.FullPath("conf/.slps")
+	m.slpdir = rtclib.FullPath("slp/")
 
-	f, err := os.Open(slpm.slpconf)
+	f, err := os.Open(m.slpconf)
 	defer f.Close()
 	if err != nil {
-		rtcs.LogError("open file %s failed: %v", slpm.slpconf, err)
-		return false
+		return fmt.Errorf("open file %s failed: %v", m.slpconf, err)
 	}
 
 	json, _ := ioutil.ReadAll(f)
 	if !gjson.ValidBytes(json) {
-		rtcs.LogError("parse file %s failed: %v", slpm.slpconf, err)
-		return false
+		return fmt.Errorf("parse file %s failed: %v", m.slpconf, err)
 	}
 
 	j, ok := gjson.ParseBytes(json).Value().(map[string]interface{})
 	if !ok {
-		rtcs.LogError("slp file %s format error: %v", slpm.slpconf, err)
-		return false
+		return fmt.Errorf("slp file %s format error: %v", m.slpconf, err)
 	}
 
 	for name, v := range j {
 		path, ok := v.(string)
 		if !ok {
-			rtcs.LogError("slp %s format error: %v", name, err)
-			return false
+			return fmt.Errorf("slp %s format error: %v", name, err)
 		}
 
-		if !slpLoad(name, path) {
-			return false
+		if err := m.slpLoad(name, path); err != nil {
+			return err
 		}
-		slpm.plugins[name] = path
+		m.plugins[name] = path
 	}
 
-	am.addInternalAPI("slpm.v1", Slpmv1)
+	return nil
 
-	return true
 }
 
-func updateSLPFile() error {
-	f, err := os.OpenFile(slpm.slpconf, os.O_TRUNC|os.O_WRONLY, 0644)
+func (m *slpm) PreMainloop() error {
+	am.addInternalAPI("slpm.v1", Slpmv1)
+
+	return nil
+}
+
+func (m *slpm) Mainloop() {
+}
+
+func (m *slpm) Reload() error {
+	return nil
+}
+
+func (m *slpm) Reopen() error {
+	return nil
+}
+
+func (m *slpm) Exit() {
+}
+
+// internal interface
+
+func (m *slpm) updateSLPFile() error {
+	f, err := os.OpenFile(m.slpconf, os.O_TRUNC|os.O_WRONLY, 0644)
 	defer f.Close()
 	if err != nil {
-		return fmt.Errorf("open file %s failed: %v", slpm.slpconf, err)
+		return fmt.Errorf("open file %s failed: %v", m.slpconf, err)
 	}
 
-	d, _ := json.Marshal(slpm.plugins)
+	d, _ := json.Marshal(m.plugins)
 
 	_, err = f.Write(d)
 	if err != nil {
-		return fmt.Errorf("write file %s failed: %v", slpm.slpconf, err)
+		return fmt.Errorf("write file %s failed: %v", m.slpconf, err)
 	}
 
 	return nil
 }
 
-func addSLP(name string, slpFile string) string {
-	if !slpLoad(name, slpFile) {
+func (m *slpm) slpLoad(name string, slpFile string) error {
+	slp := &slpPlugin{
+		name: name,
+		file: slpFile,
+		time: time.Now(),
+	}
+	path := m.slpdir + slpFile
+
+	p, err := plugin.Open(path)
+	if err != nil {
+		return fmt.Errorf("open slp plugin error: %v", err)
+	}
+
+	v, err := p.Lookup("GetInstance")
+	if err != nil {
+		return fmt.Errorf("find slp plugin entry error: %v", err)
+	}
+
+	defer func() {
+		if err := recover(); err != nil {
+			rtcs.LogError("load %s %s failed: %v", name, path, err)
+			if m.plugins[name] == "" {
+				delete(m.plugins, name)
+				m.updateSLPFile()
+			}
+		}
+	}()
+
+	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
+	m.slps[name] = slp
+
+	// SLP Init Process when loaded
+	t := rtclib.NewTask("", rtcs.taskQ, rtcs.log, rtcs.logLevel)
+	t.Name = name
+	m.getSLP(t, SLPONLOAD)
+	if t.SLP == nil {
+		return fmt.Errorf("get slp %s failed", name)
+	}
+
+	t.OnMsg(nil)
+
+	return nil
+}
+
+func (m *slpm) addSLP(name string, slpFile string) string {
+	if err := m.slpLoad(name, slpFile); err != nil {
 		return fmt.Sprintf("Load SLP %s %s failed\n", name, slpFile)
 	}
 
-	slpm.plugins[name] = slpFile
+	m.plugins[name] = slpFile
 
-	err := updateSLPFile()
+	err := m.updateSLPFile()
 	if err != nil {
 		return fmt.Sprintf("Update slp conf file %s error: %v\n",
-			slpm.slpconf, err)
+			m.slpconf, err)
 	}
 
 	return fmt.Sprintf("Load SLP %s %s successd\n", name, slpFile)
 }
 
-func delSLP(name string) string {
-	delete(slpm.plugins, name)
-	delete(slpm.slps, name)
+func (m *slpm) delSLP(name string) string {
+	delete(m.plugins, name)
+	delete(m.slps, name)
 
-	err := updateSLPFile()
+	err := m.updateSLPFile()
 	if err != nil {
 		return fmt.Sprintf("Update slp conf file %s error: %v\n",
-			slpm.slpconf, err)
+			m.slpconf, err)
 	}
 
 	return fmt.Sprintf("Delete SLP %s successd\n", name)
 }
 
-func getSLP(t *rtclib.Task, stage int) {
-	p := slpm.slps[t.Name]
+func (m *slpm) getSLP(t *rtclib.Task, stage int) {
+	p := m.slps[t.Name]
 	if p == nil {
 		rtcs.LogError("SLP %s not exist", t.Name)
 		return
@@ -201,8 +232,8 @@ func getSLP(t *rtclib.Task, stage int) {
 	t.SetCtx(p.ctx)
 }
 
-func endSLP(t *rtclib.Task) {
-	p := slpm.slps[t.Name]
+func (m *slpm) endSLP(t *rtclib.Task) {
+	p := m.slps[t.Name]
 	if p == nil { // SLP has been deleted
 		return
 	}
@@ -211,10 +242,10 @@ func endSLP(t *rtclib.Task) {
 	p.used++
 }
 
-func listSLP() string {
+func (m *slpm) listSLP() string {
 	ret := "slp\t\tused\t\tusing\t\tfile\t\ttime\n"
 	ret += "------------------------------------------------------------\n"
-	for _, v := range slpm.slps {
+	for _, v := range m.slps {
 		ret += fmt.Sprintf("%s\t%d\t%d\t%s\t%s\n", v.name, v.used, v.using,
 			v.file, v.time.Format("2006-01-02 15:04:05.000"))
 	}

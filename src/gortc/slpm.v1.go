@@ -19,7 +19,7 @@ func Slpmv1() rtclib.API {
 func (api *SLPM_V1) Get(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, listSLP(), nil
+	return -1, nil, sm.listSLP(), nil
 }
 
 func (api *SLPM_V1) Post(req *http.Request, paras string) (int,
@@ -28,11 +28,11 @@ func (api *SLPM_V1) Post(req *http.Request, paras string) (int,
 	apiname := paras
 	filename := req.URL.Query().Get("file")
 
-	return -1, nil, addSLP(apiname, filename), nil
+	return -1, nil, sm.addSLP(apiname, filename), nil
 }
 
 func (api *SLPM_V1) Delete(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, delSLP(paras), nil
+	return -1, nil, sm.delSLP(paras), nil
 }

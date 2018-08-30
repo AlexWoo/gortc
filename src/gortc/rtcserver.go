@@ -176,7 +176,7 @@ func (m *rtcServer) processMsg(jsip *rtclib.JSIP) {
 
 	t = rtclib.NewTask(dlg, m.taskQ, m.log, m.logLevel)
 	t.Name = slpname
-	getSLP(t, SLPPROCESS)
+	sm.getSLP(t, SLPPROCESS)
 	if t.SLP == nil {
 		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
 		t.DelTask()
@@ -216,10 +216,6 @@ func (m *rtcServer) PreInit() error {
 }
 
 func (m *rtcServer) Init() error {
-	if !initSLPM() {
-		return fmt.Errorf("init API Manager failed")
-	}
-
 	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
 
