@@ -120,7 +120,7 @@ func (m *rtcServer) handler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	conn := golib.NewWSServer(userid, c, m.jstack.Qsize(), rtclib.RecvMsg,
+	conn := golib.NewWSServer(userid, c, m.jstack.QSize(), rtclib.RecvMsg,
 		m.log, m.logLevel)
 
 	conn.Accept()
@@ -187,9 +187,11 @@ func (m *rtcServer) processMsg(jsip *rtclib.JSIP) {
 }
 
 func (m *rtcServer) process() {
+	jsipC := m.jstack.JSIPChannel()
+
 	for {
 		select {
-		case jsip := <-m.jsipC:
+		case jsip := <-jsipC:
 			m.processMsg(jsip)
 		case task := <-m.taskQ:
 			task.DelTask()
@@ -212,25 +214,21 @@ func (m *rtcServer) PreInit() error {
 		return err
 	}
 
+	m.jstack = rtclib.JStackInstance()
+	m.jstack.SetLog(m.log, m.logLevel)
+
 	return nil
 }
 
 func (m *rtcServer) Init() error {
-	m.jsipC = make(chan *rtclib.JSIP, 4096)
 	m.taskQ = make(chan *rtclib.Task, 1024)
-
-	m.jstack = rtclib.InitJSIPStack(m.jsipC, m.log, m.logLevel)
-
-	if m.jstack == nil {
-		return fmt.Errorf("JSIP Stack init error")
-	}
 
 	accessFile := rtclib.FullPath(m.dconfig.AccessFile)
 
 	if m.config.Listen != "" {
-		s, err := golib.NewHTTPServer(m.config.Listen, "", "", "/",
-			m.dconfig.ClientHeaderTimeout, m.dconfig.Keepalived, m.log,
-			m.handler, accessFile)
+		s, err := golib.NewHTTPServer(m.config.Listen, "", "",
+			m.jstack.Location(), m.dconfig.ClientHeaderTimeout,
+			m.dconfig.Keepalived, m.log, m.handler, accessFile)
 		if err != nil {
 			return fmt.Errorf("New API Server error: %s", err)
 		}
@@ -250,7 +248,7 @@ func (m *rtcServer) Init() error {
 		m.config.Key = rtclib.FullPath("certs/" + m.config.Key)
 
 		s, err := golib.NewHTTPServer(m.config.Listen, m.config.Cert,
-			m.config.Key, "/", m.dconfig.ClientHeaderTimeout,
+			m.config.Key, m.jstack.Location(), m.dconfig.ClientHeaderTimeout,
 			m.dconfig.Keepalived, m.log, m.handler, accessFile)
 		if err != nil {
 			return fmt.Errorf("New API TLSServer error: %s", err)
@@ -327,12 +325,12 @@ func (m *rtcServer) Reopen() error {
 
 func (m *rtcServer) Exit() {
 	if m.server != nil {
-		m.LogInfo("closing api server ...")
+		m.LogInfo("closing rtc server ...")
 		m.server.Close()
 	}
 
 	if m.tlsServer != nil {
-		m.LogInfo("closing api tlsserver ...")
+		m.LogInfo("closing rtc tlsserver ...")
 		m.tlsServer.Close()
 	}
 }

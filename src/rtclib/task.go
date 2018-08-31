@@ -44,7 +44,7 @@ var taskRWLock sync.RWMutex
 
 func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV4()
-	dlg := jstack.config.Realm + u1.String()
+	dlg := jstack.dconfig.Realm + u1.String()
 
 	t.SetDlg(dlg)
 
