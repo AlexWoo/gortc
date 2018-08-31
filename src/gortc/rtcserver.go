@@ -271,22 +271,50 @@ func (m *rtcServer) Mainloop() {
 	if m.server != nil {
 		m.LogInfo("rtc server start ...")
 		go func() {
-			err := m.server.Start()
-			if err != nil {
-				m.LogError("rtc server quit, %s", err)
+			retry := 0
+			for {
+				err := m.server.Start()
+				if err != nil {
+					retry++
+					m.LogError("rtc server start failure %d, %s", retry, err)
+
+					if retry >= 10 {
+						m.LogError("rtc server start failure, system exit")
+						os.Exit(1)
+					}
+
+					time.Sleep(500 * time.Millisecond)
+				} else {
+					m.LogError("rtc server close")
+					quit <- true
+					break
+				}
 			}
-			quit <- true
 		}()
 	}
 
 	if m.tlsServer != nil {
-		m.LogInfo("rtc server start ...")
+		m.LogInfo("rtc tlsserver start ...")
 		go func() {
-			err := m.tlsServer.Start()
-			if err != nil {
-				m.LogError("rtc tlsserver quit, %s", err)
+			retry := 0
+			for {
+				err := m.tlsServer.Start()
+				if err != nil {
+					retry++
+					m.LogError("rtc tlsserver start failure %d, %s", retry, err)
+
+					if retry >= 10 {
+						m.LogError("rtc tlsserver start failure, system exit")
+						os.Exit(1)
+					}
+
+					time.Sleep(500 * time.Millisecond)
+				} else {
+					m.LogError("rtc tlsserver close")
+					quit <- true
+					break
+				}
 			}
-			quit <- true
 		}()
 	}
 

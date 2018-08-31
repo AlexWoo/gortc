@@ -201,22 +201,50 @@ func (m *apiServer) Mainloop() {
 	if m.server != nil {
 		m.LogInfo("api server start ...")
 		go func() {
-			err := m.server.Start()
-			if err != nil {
-				m.LogError("api server quit, %s", err)
+			retry := 0
+			for {
+				err := m.server.Start()
+				if err != nil {
+					retry++
+					m.LogError("api server start failure %d, %s", retry, err)
+
+					if retry >= 10 {
+						m.LogError("api server start failure, system exit")
+						os.Exit(1)
+					}
+
+					time.Sleep(500 * time.Millisecond)
+				} else {
+					m.LogError("api server close")
+					quit <- true
+					break
+				}
 			}
-			quit <- true
 		}()
 	}
 
 	if m.tlsServer != nil {
-		m.LogInfo("api server start ...")
+		m.LogInfo("api tlsserver start ...")
 		go func() {
-			err := m.tlsServer.Start()
-			if err != nil {
-				m.LogError("api tlsserver quit, %s", err)
+			retry := 0
+			for {
+				err := m.tlsServer.Start()
+				if err != nil {
+					retry++
+					m.LogError("api tlsserver start failure %d, %s", retry, err)
+
+					if retry >= 10 {
+						m.LogError("api tlsserver start failure, system exit")
+						os.Exit(1)
+					}
+
+					time.Sleep(500 * time.Millisecond)
+				} else {
+					m.LogError("api tlsserver close")
+					quit <- true
+					break
+				}
 			}
-			quit <- true
 		}()
 	}
 
