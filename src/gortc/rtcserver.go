@@ -20,6 +20,7 @@ import (
 type rtcConfig struct {
 	Listen    string
 	TlsListen string
+	Location  string `default:"/rtc"`
 	Cert      string
 	Key       string
 }
@@ -31,6 +32,7 @@ type rtcDConfig struct {
 	ClientHeaderTimeout time.Duration `default:"10s"`
 	Keepalived          time.Duration `default:"60s"`
 	AccessFile          string        `default:"logs/access.log"`
+	Qsize               uint64        `default:"1024"`
 }
 
 type rtcServer struct {
@@ -42,9 +44,7 @@ type rtcServer struct {
 	tlsServer *golib.HTTPServer
 	nServers  uint
 
-	jsipC  chan *rtclib.JSIP
-	taskQ  chan *rtclib.Task
-	jstack *rtclib.JSIPStack
+	taskQ chan *rtclib.Task
 }
 
 var rtcs *rtcServer
@@ -120,7 +120,7 @@ func (m *rtcServer) handler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	conn := golib.NewWSServer(userid, c, m.jstack.QSize(), rtclib.RecvMsg,
+	conn := golib.NewWSServer(userid, c, m.dconfig.Qsize, rtclib.RecvMsg,
 		m.log, m.logLevel)
 
 	conn.Accept()
@@ -187,7 +187,7 @@ func (m *rtcServer) processMsg(jsip *rtclib.JSIP) {
 }
 
 func (m *rtcServer) process() {
-	jsipC := m.jstack.JSIPChannel()
+	jsipC := rtclib.JStackInstance().JSIPChannel()
 
 	for {
 		select {
@@ -214,8 +214,7 @@ func (m *rtcServer) PreInit() error {
 		return err
 	}
 
-	m.jstack = rtclib.JStackInstance()
-	m.jstack.SetLog(m.log, m.logLevel)
+	rtclib.JStackInstance().SetLog(m.log, m.logLevel)
 
 	return nil
 }
@@ -227,7 +226,7 @@ func (m *rtcServer) Init() error {
 
 	if m.config.Listen != "" {
 		s, err := golib.NewHTTPServer(m.config.Listen, "", "",
-			m.jstack.Location(), m.dconfig.ClientHeaderTimeout,
+			m.config.Location, m.dconfig.ClientHeaderTimeout,
 			m.dconfig.Keepalived, m.log, m.handler, accessFile)
 		if err != nil {
 			return fmt.Errorf("New API Server error: %s", err)
@@ -248,7 +247,7 @@ func (m *rtcServer) Init() error {
 		m.config.Key = rtclib.FullPath("certs/" + m.config.Key)
 
 		s, err := golib.NewHTTPServer(m.config.Listen, m.config.Cert,
-			m.config.Key, m.jstack.Location(), m.dconfig.ClientHeaderTimeout,
+			m.config.Key, m.config.Location, m.dconfig.ClientHeaderTimeout,
 			m.dconfig.Keepalived, m.log, m.handler, accessFile)
 		if err != nil {
 			return fmt.Errorf("New API TLSServer error: %s", err)
