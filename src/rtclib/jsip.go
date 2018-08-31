@@ -662,6 +662,7 @@ type JSIPStack struct {
 	sendq_s      chan *JSIP
 	transTimeout chan *JSIPTrasaction
 	sessTimeout  chan *JSIPSession
+	close        chan bool
 
 	sessions     map[string]*JSIPSession
 	transactions map[string]*JSIPTrasaction
@@ -677,6 +678,7 @@ func JStackInstance() *JSIPStack {
 	jstack = &JSIPStack{
 		transTimeout: make(chan *JSIPTrasaction),
 		sessTimeout:  make(chan *JSIPSession),
+		close:        make(chan bool),
 		sessions:     make(map[string]*JSIPSession),
 		transactions: make(map[string]*JSIPTrasaction),
 	}
@@ -766,6 +768,8 @@ func (m *JSIPStack) Mainloop() {
 			trans.timeout()
 		case sess := <-m.sessTimeout:
 			sess.sessionTimer()
+		case <-m.close:
+			return
 		}
 	}
 }
@@ -783,6 +787,7 @@ func (m *JSIPStack) Reopen() error {
 }
 
 func (m *JSIPStack) Exit() {
+	m.close <- true
 }
 
 // for log ctx
