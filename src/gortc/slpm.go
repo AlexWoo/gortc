@@ -152,17 +152,11 @@ func (m *slpm) slpLoad(name string, slpFile string) error {
 		return fmt.Errorf("find slp plugin entry error: %v", err)
 	}
 
-	defer func() {
-		if err := recover(); err != nil {
-			rtcs.LogError("load %s %s failed: %v", name, path, err)
-			if m.plugins[name] == "" {
-				delete(m.plugins, name)
-				m.updateSLPFile()
-			}
-		}
-	}()
-
-	slp.instance = v.(func(task *rtclib.Task) rtclib.SLP)
+	instance, ok := v.(func(task *rtclib.Task) rtclib.SLP)
+	if !ok {
+		return fmt.Errorf("load %s %s failed: GetInstance type err", name, path)
+	}
+	slp.instance = instance
 	m.slps[name] = slp
 
 	// SLP Init Process when loaded

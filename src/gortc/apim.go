@@ -149,17 +149,11 @@ func (m *apim) apiLoad(name string, apiFile string) error {
 		return fmt.Errorf("find api plugin entry error: %v", err)
 	}
 
-	defer func() {
-		if err := recover(); err != nil {
-			apis.LogError("load %s %s failed: %v", name, path, err)
-			if m.plugins[name] == "" {
-				delete(m.plugins, name)
-				m.updateAPIFile()
-			}
-		}
-	}()
-
-	api.instance = v.(func() rtclib.API)
+	instance, ok := v.(func() rtclib.API)
+	if !ok {
+		return fmt.Errorf("load %s %s failed: APIInstance type err", name, path)
+	}
+	api.instance = instance
 	m.apis[name] = api
 
 	return nil
