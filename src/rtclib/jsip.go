@@ -634,12 +634,12 @@ func (sess *JSIPSession) sessionTimer() {
 }
 
 type jsipConfig struct {
-	Location string `default:"rtc"`
-	Qsize    uint64 `default:"1024"`
+	Qsize uint64 `default:"1024"`
 }
 
 type jsipDConfig struct {
 	Realm        string
+	Location     string        `default:"/rtc"`
 	ConnTimeout  time.Duration `default:"3s"`
 	Retry        int64         `default:"10"`
 	TransTimer   time.Duration `default:"5s"`
@@ -817,7 +817,7 @@ func (m *JSIPStack) connect(uri string) *golib.WSConn {
 		return nil
 	}
 
-	url := "ws://" + jsipUri.HostWithPort + m.config.Location + "?userid=" +
+	url := "ws://" + jsipUri.HostWithPort + m.dconfig.Location + "?userid=" +
 		m.dconfig.Realm
 	conn := golib.NewWSClient(jsipUri.UserWithHost, url, m.dconfig.ConnTimeout,
 		int(m.dconfig.Retry), m.config.Qsize, RecvMsg, m.log, m.logLevel)
@@ -1606,16 +1606,6 @@ func (m *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 // JSIP Stack realm, such as imas.test.com
 func Realm() string {
 	return jstack.dconfig.Realm
-}
-
-// JSIP Stack location
-func (m *JSIPStack) Location() string {
-	return m.config.Location
-}
-
-// JSIP Stack queue size
-func (m *JSIPStack) QSize() uint64 {
-	return m.config.Qsize
 }
 
 // JSIP Stack queue to application layer
