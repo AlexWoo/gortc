@@ -61,7 +61,7 @@ func (m *slpm) PreInit() error {
 
 func (m *slpm) Init() error {
 	m.slpconf = rtclib.FullPath("conf/.slps")
-	m.slpdir = rtclib.FullPath("slp/")
+	m.slpdir = rtclib.FullPath("plugins/")
 
 	f, err := os.Open(m.slpconf)
 	defer f.Close()
@@ -180,7 +180,7 @@ func (m *slpm) slpLoad(name string, slpFile string) error {
 
 func (m *slpm) addSLP(name string, slpFile string) string {
 	if err := m.slpLoad(name, slpFile); err != nil {
-		return fmt.Sprintf("Load SLP %s %s failed\n", name, slpFile)
+		return fmt.Sprintf("Load SLP %s %s failed, %s\n", name, slpFile, err)
 	}
 
 	m.plugins[name] = slpFile

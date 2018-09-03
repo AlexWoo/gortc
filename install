@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+
+exec=`basename $0`
+
+usage()
+{
+cat << END
+
+usage: $exec [options]
+
+    options:
+        --help                  print this message
+        --prefix=InstallPath    set installation prefix
+
+END
+}
+
+help=no
+
+for option
+do
+    case "$option" in
+        -*=*) value=`echo "$option" | sed -e 's/[-_a-zA-Z0-9]*=//'` ;;
+           *) value=""                                              ;;
+    esac
+
+    case "$option" in
+        --help)         help=yes                                    ;;
+        --prefix=)      InstallPath="!"                             ;;
+        --prefix=*)     InstallPath="$value"                        ;;
+        *)
+            echo "$exec: error: invalid option \"$option\""
+            usage
+            exit 1
+        ;;
+    esac
+done
+
+if [ $help = yes ];then
+    usage
+    exit 0
+fi
+
+case ".$InstallPath" in
+    .)  InstallPath=$HOME/gortc     ;;
+    .!) InstallPath=$HOME/gortc     ;;
+    *)                              ;;
+esac
+
+OLDGOPATH="$GOPATH"
+export GOPATH="$InstallPath"
+
+# compile
+src=$InstallPath/src/gortc/
+mkdir -p $InstallPath
+cp -rf src $InstallPath
+sed -i "s#rtcpath = \".*\"#rtcpath = \"$InstallPath\"#" $InstallPath/src/gortc/gortc.go
+
+cd $src
+# get dependence
+go get
+
+# install
+go install
+
+cd -
+
+mkdir -p $InstallPath/conf
+mkdir -p $InstallPath/logs
+mkdir -p $InstallPath/plugins
+mkdir -p $InstallPath/certs
+
+confs="gortc.ini .slps .apis"
+
+for f in $confs
+do
+    if [ ! -f $InstallPath/conf/$f ];then
+        install conf/$f $InstallPath/conf/$f -m 644
+    fi
+done
+
+bins="pcompile"
+
+for f in $bins
+do
+    install bin/$f $InstallPath/bin/$f -m 755
+done
+
+export GOPATH="$OLDGOPATH"

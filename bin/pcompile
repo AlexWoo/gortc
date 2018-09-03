@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+
+exec=`basename $0`
+
+usage()
+{
+cat << END
+
+usage: $exec [options] slpdir
+
+    options:
+        --help                  print this message
+        --prefix=InstallPath    set installation prefix
+
+END
+}
+
+help=no
+
+for option
+do
+    case "$option" in
+        -*=*) value=`echo "$option" | sed -e 's/[-_a-zA-Z0-9]*=//'` ;;
+           *) value=`echo "$option"`                                ;;
+    esac
+
+    case "$option" in
+        --help)         help=yes                                    ;;
+        --prefix=)      InstallPath="!"                             ;;
+        --prefix=*)     InstallPath="$value"                        ;;
+        *)
+            if [ -n "$path" ];then
+                echo "$exec: error: invalid option \"$option\""
+                usage
+                exit 1
+            fi
+
+            path=$value
+        ;;
+    esac
+done
+
+if [ $help = yes ];then
+    usage
+    exit 0
+fi
+
+case ".$InstallPath" in
+    .)  InstallPath=$HOME/gortc     ;;
+    .!) InstallPath=$HOME/gortc     ;;
+    *)                              ;;
+esac
+
+OLDGOPATH="$GOPATH"
+export GOPATH="$InstallPath"
+
+slp=`basename $path`
+cd $path
+echo "start compile $slp with $path"
+
+echo "go build -ldflags \"-pluginpath=$slp-`date +%Y%m%d%H%M%S`\" -buildmode=plugin -o $InstallPath/plugins/$slp.so"
+go build -ldflags "-pluginpath=$slp-`date +%Y%m%d%H%M%S`" -buildmode=plugin -o $InstallPath/plugins/$slp.so
+
+cd -
+
+# slp conf
+if [ -d $path/conf ];then
+    mkdir -p $InstallPath/conf/$slp
+    echo "mkdir -p $InstallPath/conf/$slp"
+
+    confs=`ls $path/conf`
+    for f in $confs
+    do
+        test -f $InstallPath/conf/$slp/$f || cp $path/conf/$f $InstallPath/conf/$slp/
+    done
+fi
+
+export GOPATH="$OLDGOPATH"

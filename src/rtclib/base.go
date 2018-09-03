@@ -32,7 +32,7 @@ func FullPath(path string) string {
 		return path
 	}
 
-	if strings.HasSuffix(path, "/") {
+	if strings.HasPrefix(path, "/") {
 		return path
 	}
 

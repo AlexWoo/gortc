@@ -51,7 +51,7 @@ func (m *apim) PreInit() error {
 
 func (m *apim) Init() error {
 	m.apiconf = rtclib.FullPath("conf/.apis")
-	m.apidir = rtclib.FullPath("api/")
+	m.apidir = rtclib.FullPath("plugins/")
 
 	f, err := os.Open(m.apiconf)
 	defer f.Close()
