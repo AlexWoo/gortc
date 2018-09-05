@@ -60,6 +60,8 @@ slp=`basename $path`
 cd $path
 echo "start compile $slp with $path"
 
+go get
+
 echo "go build -ldflags \"-pluginpath=$slp-`date +%Y%m%d%H%M%S`\" -buildmode=plugin -o $InstallPath/plugins/$slp.so"
 go build -ldflags "-pluginpath=$slp-`date +%Y%m%d%H%M%S`" -buildmode=plugin -o $InstallPath/plugins/$slp.so
 
