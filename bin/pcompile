@@ -48,9 +48,9 @@ if [ $help = yes ];then
 fi
 
 case ".$InstallPath" in
-    .)  InstallPath=$HOME/gortc     ;;
-    .!) InstallPath=$HOME/gortc     ;;
-    *)                              ;;
+    .)  InstallPath=/usr/local/gortc    ;;
+    .!) InstallPath=/usr/local/gortc    ;;
+    *)                                  ;;
 esac
 
 OLDGOPATH="$GOPATH"
