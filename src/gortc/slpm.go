@@ -160,7 +160,7 @@ func (m *slpm) slpLoad(name string, slpFile string) error {
 	m.slps[name] = slp
 
 	// SLP Init Process when loaded
-	t := rtclib.NewTask("", rtcs.taskQ, rtcs.log, rtcs.logLevel)
+	t := rtclib.NewTask("", dist.taskQ, dist.setdlg, rtcs.log, rtcs.logLevel)
 	t.Name = name
 	m.getSLP(t, SLPONLOAD)
 	if t.SLP == nil {

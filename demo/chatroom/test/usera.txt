@@ -1,0 +1,71 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "room:test1@test.com",
+        "DialogueID": "aaa1",
+        "Expire": 300,
+        "P-Asserted-Identity": "a@test.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "timeout": "10s",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "room:test1@test.com",
+        "DialogueID": "aaa2",
+        "CSeq": 1,
+        "P-Asserted-Identity": "a@test.com",
+        "Body": "hello world"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "timeout": "10s",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@test.com",
+        "From": "Alex@test.com",
+        "To": "room:test1@test.com",
+        "DialogueID": "aaa3",
+        "Expire": 0,
+        "P-Asserted-Identity": "a@test.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Code": 200,
+        "CSeq": 1
+    }
+}
+
+]

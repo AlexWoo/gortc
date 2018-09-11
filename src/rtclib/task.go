@@ -6,7 +6,6 @@ package rtclib
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/alexwoo/golib"
 	uuid "github.com/satori/go.uuid"
@@ -24,14 +23,15 @@ type SLP interface {
 }
 
 type Task struct {
-	Name  string
-	SLP   SLP
-	ctx   interface{}
-	dlgs  []string
-	msgs  chan *JSIP
-	taskq chan *Task
-	quitC chan bool
-	quit  bool
+	Name   string
+	SLP    SLP
+	ctx    interface{}
+	dlgs   map[string]func(jsip *JSIP)
+	relid  string
+	msgs   chan *JSIP
+	taskq  chan *Task
+	quit   bool
+	setdlg func(dlg string, task *Task)
 
 	log      *golib.Log
 	logLevel int
@@ -39,99 +39,107 @@ type Task struct {
 	Process func(jsip *JSIP)
 }
 
-var tasks = make(map[string]*Task)
-var taskRWLock sync.RWMutex
+func NewTask(relid string, taskq chan *Task,
+	setdlg func(dlg string, task *Task), log *golib.Log, logLevel int) *Task {
 
+	t := &Task{
+		dlgs:     make(map[string]func(jsip *JSIP)),
+		relid:    relid,
+		msgs:     make(chan *JSIP, 1024),
+		taskq:    taskq,
+		setdlg:   setdlg,
+		log:      log,
+		logLevel: logLevel,
+	}
+
+	go t.run()
+
+	return t
+}
+
+// New a jsip DialogueID for sending a new jsip session
 func (t *Task) NewDialogueID() string {
 	u1, _ := uuid.NewV4()
 	dlg := jstack.dconfig.Realm + u1.String()
 
-	t.SetDlg(dlg)
+	t.dlgs[dlg] = nil
+	t.setdlg(dlg, t)
 
 	return dlg
 }
 
+// New a jsip DialogueID with jsip msg process entry,
+// for sending a new jsip session
+func (t *Task) NewDialogueIDWithEntry(process func(*JSIP)) string {
+	u1, _ := uuid.NewV4()
+	dlg := jstack.dconfig.Realm + u1.String()
+
+	t.dlgs[dlg] = process
+	t.setdlg(dlg, t)
+
+	return dlg
+}
+
+// Get SLP ctx
 func (t *Task) GetCtx() interface{} {
 	return t.ctx
+}
+
+// Terminate SLP instance
+func (t *Task) SetFinished() {
+	t.quit = true
+}
+
+func (t *Task) run() {
+	defer func() {
+		if err := recover(); err != nil {
+			t.LogError("task process err: %s", err)
+			t.taskq <- t
+		}
+	}()
+
+	for {
+		msg := <-t.msgs
+		if msg == nil {
+			t.Process(msg)
+			continue
+		}
+
+		entry := t.dlgs[msg.DialogueID]
+		if entry == nil {
+			t.Process(msg)
+		} else {
+			entry(msg)
+		}
+
+		if t.quit {
+			t.taskq <- t
+		}
+	}
 }
 
 func (t *Task) SetCtx(ctx interface{}) {
 	t.ctx = ctx
 }
 
-func (t *Task) DelTask() {
-	taskRWLock.Lock()
-	defer taskRWLock.Unlock()
-
-	for _, dlg := range t.dlgs {
-		delete(tasks, dlg)
-	}
-}
-
-func (t *Task) run() {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("task process err", err)
-			t.taskq <- t
-			<-t.quitC
-		}
-	}()
-
-	for {
-		select {
-		case msg := <-t.msgs:
-			t.Process(msg)
-			if t.quit {
-				t.taskq <- t
-			}
-		case <-t.quitC:
-			return
-		}
-	}
-}
-
-func (t *Task) SetFinished() {
-	t.quit = true
-}
-
 func (t *Task) OnMsg(jsip *JSIP) {
 	t.msgs <- jsip
 }
 
-func (t *Task) SetDlg(dlg string) {
-	if dlg == "" {
-		return
+func (t *Task) GetDlgs() []string {
+	dlgs := make([]string, len(t.dlgs))
+	for dlg, _ := range t.dlgs {
+		dlgs = append(dlgs, dlg)
 	}
 
-	taskRWLock.Lock()
-	defer taskRWLock.Unlock()
-
-	t.dlgs = append(t.dlgs, dlg)
-	tasks[dlg] = t
+	return dlgs
 }
 
-func GetTask(dlg string) *Task {
-	taskRWLock.RLock()
-	defer taskRWLock.RUnlock()
-
-	return tasks[dlg]
+func (t *Task) GetRelid() string {
+	return t.relid
 }
 
-func NewTask(dlg string, taskq chan *Task, log *golib.Log, logLevel int) *Task {
-	t := &Task{
-		msgs:     make(chan *JSIP, 1024),
-		taskq:    taskq,
-		quitC:    make(chan bool, 1),
-		log:      log,
-		logLevel: logLevel,
-	}
-
-	t.SetDlg(dlg)
-
-	go t.run()
-
-	return t
-}
+// for log ctx
 
 func (t *Task) Prefix() string {
 	return "[SLP]"
@@ -149,18 +157,24 @@ func (t *Task) LogLevel() int {
 	return t.logLevel
 }
 
+// for log
+
+// log a debug level log
 func (t *Task) LogDebug(format string, v ...interface{}) {
 	t.log.LogDebug(t, format, v...)
 }
 
+// log a info level log
 func (t *Task) LogInfo(format string, v ...interface{}) {
 	t.log.LogInfo(t, format, v...)
 }
 
+// log a error level log
 func (t *Task) LogError(format string, v ...interface{}) {
 	t.log.LogError(t, format, v...)
 }
 
+// log a fatal level log, it will cause system exit
 func (t *Task) LogFatal(format string, v ...interface{}) {
 	t.log.LogFatal(t, format, v...)
 }

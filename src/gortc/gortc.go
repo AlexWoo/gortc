@@ -26,6 +26,7 @@ func main() {
 	ms.AddModule("main", &mainModule{})
 	ms.AddModule("apiserver", apiServerInstance())
 	ms.AddModule("apimanager", apimInstance())
+	ms.AddModule("distribute", distInstance())
 	ms.AddModule("jsipstack", rtclib.JStackInstance())
 	ms.AddModule("rtcserver", rtcServerInstance())
 	ms.AddModule("slpmanager", slpmInstance())

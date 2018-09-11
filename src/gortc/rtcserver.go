@@ -126,79 +126,6 @@ func (m *rtcServer) handler(w http.ResponseWriter, req *http.Request) {
 	conn.Accept()
 }
 
-func (m *rtcServer) processMsg(jsip *rtclib.JSIP) {
-	dlg := jsip.DialogueID
-	t := rtclib.GetTask(dlg)
-	if t != nil {
-		t.OnMsg(jsip)
-		return
-	}
-
-	if jsip.Code > 0 {
-		m.LogError("Receive %s but SLP if finished", jsip.Name())
-		return
-	}
-
-	if jsip.Type != rtclib.INVITE && jsip.Type != rtclib.REGISTER &&
-		jsip.Type != rtclib.OPTIONS && jsip.Type != rtclib.MESSAGE &&
-		jsip.Type != rtclib.SUBSCRIBE {
-
-		m.LogError("Receive %s but SLP if finished", jsip.Name())
-		return
-	}
-
-	slpname := "default"
-
-	if len(jsip.Router) != 0 {
-		jsipUri, err := rtclib.ParseJSIPUri(jsip.Router[0])
-		if err != nil {
-			rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 400))
-			return
-		}
-
-		relid, ok := jsipUri.Paras["relid"].(string)
-		if ok {
-			t := rtclib.GetTask(relid)
-			if t == nil {
-				rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 400))
-				return
-			}
-
-			t.OnMsg(jsip)
-			return
-		}
-
-		name, ok := jsipUri.Paras["type"].(string)
-		if ok && name != "" {
-			slpname = name
-		}
-	}
-
-	t = rtclib.NewTask(dlg, m.taskQ, m.log, m.logLevel)
-	t.Name = slpname
-	sm.getSLP(t, SLPPROCESS)
-	if t.SLP == nil {
-		rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 404))
-		t.DelTask()
-		return
-	}
-
-	t.OnMsg(jsip)
-}
-
-func (m *rtcServer) process() {
-	jsipC := rtclib.JStackInstance().JSIPChannel()
-
-	for {
-		select {
-		case jsip := <-jsipC:
-			m.processMsg(jsip)
-		case task := <-m.taskQ:
-			task.DelTask()
-		}
-	}
-}
-
 // for module interface
 
 func (m *rtcServer) PreInit() error {
@@ -317,8 +244,6 @@ func (m *rtcServer) Mainloop() {
 			}
 		}()
 	}
-
-	go m.process()
 
 	for {
 		<-quit
