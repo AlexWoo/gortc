@@ -11,22 +11,13 @@ type msg struct {
 	res chan *rtclib.JSIP
 }
 
-type req struct {
-	req  *rtclib.JSIP
-	room *room
-}
-
 type ctx struct {
 	msgs    chan *msg         // msg send to room
-	reqs    chan *req         // req send outside
 	resp    chan *rtclib.JSIP // resp for req
 	roomdel chan string       // room name wait for delete
 
 	// key: room name, value: room, for room manager
 	rooms map[string]*room
-
-	// key: DialogueID, value: room, for resp send to room
-	dlgs map[string]*room
 }
 
 type ChatRoom struct {
@@ -48,11 +39,9 @@ func GetInstance(task *rtclib.Task) rtclib.SLP {
 func (slp *ChatRoom) NewSLPCtx() interface{} {
 	ctx := &ctx{
 		msgs:    make(chan *msg, slp.qsize),
-		reqs:    make(chan *req, slp.qsize),
 		resp:    make(chan *rtclib.JSIP),
 		roomdel: make(chan string),
 		rooms:   make(map[string]*room),
-		dlgs:    make(map[string]*room),
 	}
 
 	return ctx
@@ -150,20 +139,6 @@ func (slp *ChatRoom) roomManager() {
 		case msg := <-ctx.msgs:
 			// Subscriber or Messeges From User
 			slp.onMsg(msg)
-
-		case req := <-ctx.reqs:
-			// Request Send to outside
-			dlg := req.req.DialogueID
-			ctx.dlgs[dlg] = req.room
-			rtclib.SendMsg(req.req)
-
-		case resp := <-ctx.resp:
-			// Response Receive from outside
-			dlg := resp.DialogueID
-			room := ctx.dlgs[dlg]
-			room.resp <- resp
-
-			delete(ctx.dlgs, dlg)
 
 		case name := <-ctx.roomdel:
 			// room need to deleted

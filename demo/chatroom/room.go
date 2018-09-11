@@ -12,12 +12,41 @@ type user struct {
 	userid   string
 	nickname string
 	timer    *golib.Timer
+	task     *rtclib.Task
+	res      chan *rtclib.JSIP
 }
 
 func (u *user) subTimeout(d interface{}) {
 	r := d.(*room)
 
 	r.quit <- u
+}
+
+func (u *user) result(res *rtclib.JSIP) {
+	u.res <- res
+}
+
+func (u *user) sendMessage(msg *rtclib.JSIP) {
+	dlg := u.task.NewDialogueIDWithEntry(u.result)
+	m := rtclib.JSIPMsgClone(msg, dlg)
+	m.RequestURI = u.userid
+
+	if len(m.Router) > 0 {
+		m.Router = m.Router[1:]
+	}
+
+	m.SetString("P-Asserted-Identity", rtclib.Realm())
+
+	rtclib.SendMsg(m)
+	t := time.NewTimer(5 * time.Second)
+
+	select {
+	case res := <-u.res:
+		u.task.LogInfo("Recv MESSAGE result %s", res.Abstract())
+		t.Stop()
+	case <-t.C:
+		u.task.LogError("Send MESSAGE timeout")
+	}
 }
 
 type room struct {
@@ -38,6 +67,8 @@ func (r *room) newUser(userid string, nickname string,
 	u := &user{
 		userid:   userid,
 		nickname: nickname,
+		task:     r.task,
+		res:      make(chan *rtclib.JSIP, 1024),
 	}
 
 	u.timer = golib.NewTimer(expire, u.subTimeout, r)
@@ -109,8 +140,6 @@ func (r *room) processSubscriber(sub *msg) {
 }
 
 func (r *room) processMessage(mess *msg) {
-	ctx := r.task.GetCtx().(*ctx)
-
 	userid, _ := mess.req.GetString("P-Asserted-Identity")
 
 	user := r.users[userid]
@@ -124,26 +153,12 @@ func (r *room) processMessage(mess *msg) {
 
 	mess.res <- rtclib.JSIPMsgRes(mess.req, 200)
 
-	for id := range r.users {
+	for id, u := range r.users {
 		if id == userid {
 			continue
 		}
 
-		message := rtclib.JSIPMsgClone(mess.req, r.task.NewDialogueID())
-		message.RequestURI = id
-
-		if len(message.Router) > 0 {
-			message.Router = message.Router[1:]
-		}
-
-		message.SetString("P-Asserted-Identity", rtclib.Realm())
-
-		req := &req{
-			req:  message,
-			room: r,
-		}
-
-		ctx.reqs <- req
+		go u.sendMessage(mess.req)
 	}
 }
 
@@ -154,9 +169,6 @@ func (r *room) process() {
 			if r.delUser(u) {
 				return
 			}
-
-		case resp := <-r.resp:
-			log.Printf("Receive response: %s", resp.Abstract())
 
 		case msg := <-r.msgs:
 			switch msg.req.Type {
