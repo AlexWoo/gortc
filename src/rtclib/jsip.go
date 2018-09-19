@@ -216,6 +216,22 @@ func copyMap(src map[string]interface{}) map[string]interface{} {
 	return dst
 }
 
+func copyBody(src interface{}) interface{} {
+	if s, ok := src.(string); ok {
+		return s
+	}
+
+	if s, ok := src.(map[string]interface{}); ok {
+		return copyMap(s)
+	}
+
+	if s, ok := src.([]interface{}); ok {
+		return copySlice(s)
+	}
+
+	return nil
+}
+
 func getJsonInt(j map[string]interface{}, key string) (int, bool) {
 	value, ok := j[key].(float64)
 	if !ok {
@@ -343,7 +359,7 @@ type JSIP struct {
 	CSeq       uint64
 	DialogueID string
 	Router     []string
-	Body       string
+	Body       interface{}
 	RawMsg     map[string]interface{}
 
 	inner       bool
@@ -892,7 +908,7 @@ func (stack *JSIPStack) jsipUnParser(data []byte) (*JSIP, error) {
 
 	r := gjson.GetBytes(data, "Body")
 	if r.Exists() {
-		jsip.Body = r.String()
+		jsip.Body = r.Value()
 	}
 
 	return jsip, nil
@@ -921,7 +937,7 @@ func (stack *JSIPStack) jsipParser(jsip *JSIP) *JSIP {
 		jsip.RawMsg["Router"] = router
 	}
 
-	if jsip.Body != "" {
+	if jsip.Body != nil {
 		jsip.RawMsg["Body"] = jsip.Body
 	}
 
@@ -1665,7 +1681,7 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 		CSeq:       req.CSeq,
 		DialogueID: dlg,
 		Router:     req.Router,
-		Body:       req.Body,
+		Body:       copyBody(req.Body),
 		RawMsg:     copyMap(req.RawMsg),
 	}
 
