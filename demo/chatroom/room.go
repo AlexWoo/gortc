@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"rtclib"
+	"sync"
 	"time"
 
 	"github.com/alexwoo/golib"
@@ -58,7 +59,8 @@ type room struct {
 	task *rtclib.Task
 
 	// key: userid, value: user, record users register in rooms
-	users map[string]*user
+	users     map[string]*user
+	usersLock sync.RWMutex
 }
 
 func (r *room) newUser(userid string, nickname string,
@@ -81,8 +83,13 @@ func (r *room) delUser(u *user) bool {
 
 	u.timer.Stop()
 
+	r.usersLock.Lock()
 	delete(r.users, u.userid)
 	log.Printf("Delete user %s, %v", u.userid, r.users)
+	r.usersLock.Unlock()
+
+	r.usersLock.RLock()
+	defer r.usersLock.RUnlock()
 	if len(r.users) == 0 {
 		ctx.roomdel <- r.name
 		return true
@@ -115,11 +122,15 @@ func (r *room) processSubscriber(sub *msg) {
 	expire := time.Duration(exp) * time.Second
 	userid, _ := sub.req.GetString("P-Asserted-Identity")
 
+	r.usersLock.RLock()
 	user := r.users[userid]
+	r.usersLock.RUnlock()
 	if user == nil {
 		if expire > 0 { // User register in chatroom
 			user = r.newUser(userid, sub.req.From, expire)
+			r.usersLock.Lock()
 			r.users[userid] = user
+			r.usersLock.Unlock()
 			sub.res <- rtclib.JSIPMsgRes(sub.req, 200)
 			log.Printf("User %s register in %s", userid, r.name)
 		} else {
@@ -142,7 +153,9 @@ func (r *room) processSubscriber(sub *msg) {
 func (r *room) processMessage(mess *msg) {
 	userid, _ := mess.req.GetString("P-Asserted-Identity")
 
+	r.usersLock.RLock()
 	user := r.users[userid]
+	r.usersLock.RUnlock()
 	if user == nil {
 		mess.res <- rtclib.JSIPMsgRes(mess.req, 404)
 		log.Printf("User %s not register in %s when receive Message",
@@ -153,6 +166,7 @@ func (r *room) processMessage(mess *msg) {
 
 	mess.res <- rtclib.JSIPMsgRes(mess.req, 200)
 
+	r.usersLock.RLock()
 	for id, u := range r.users {
 		if id == userid {
 			continue
@@ -160,6 +174,7 @@ func (r *room) processMessage(mess *msg) {
 
 		go u.sendMessage(mess.req)
 	}
+	r.usersLock.RUnlock()
 }
 
 func (r *room) process() {

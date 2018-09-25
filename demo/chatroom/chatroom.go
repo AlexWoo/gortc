@@ -3,7 +3,10 @@ package main
 import (
 	"log"
 	"rtclib"
+	"sync"
 	"time"
+
+	"github.com/alexwoo/golib"
 )
 
 type msg struct {
@@ -17,7 +20,14 @@ type ctx struct {
 	roomdel chan string       // room name wait for delete
 
 	// key: room name, value: room, for room manager
-	rooms map[string]*room
+	rooms     map[string]*room
+	roomsLock sync.RWMutex
+}
+
+type config struct {
+	Qsize     golib.Size    `default:"1k"`
+	Timeout   time.Duration `default:"5s"`
+	Apiserver string
 }
 
 type ChatRoom struct {
@@ -26,25 +36,54 @@ type ChatRoom struct {
 	timeout time.Duration
 }
 
+var (
+	c    *ctx
+	conf *config
+)
+
+func loadConfig() error {
+	file := rtclib.FullPath("conf/chatroom/chatroom.conf")
+	pconf := &config{}
+
+	err := golib.JsonConfigFile(file, pconf)
+	if err == nil {
+		conf = pconf
+	}
+
+	return err
+}
+
 func GetInstance(task *rtclib.Task) rtclib.SLP {
+	if conf == nil {
+		err := loadConfig()
+		if err != nil {
+			task.LogError("Load Config error: %s", err)
+			return nil
+		}
+	}
+
 	slp := &ChatRoom{
 		task:    task,
-		qsize:   4096,
-		timeout: 5 * time.Second,
+		qsize:   int(conf.Qsize),
+		timeout: conf.Timeout,
 	}
 
 	return slp
 }
 
 func (slp *ChatRoom) NewSLPCtx() interface{} {
-	ctx := &ctx{
+	if c != nil {
+		return c
+	}
+
+	c = &ctx{
 		msgs:    make(chan *msg, slp.qsize),
 		resp:    make(chan *rtclib.JSIP),
 		roomdel: make(chan string),
 		rooms:   make(map[string]*room),
 	}
 
-	return ctx
+	return c
 }
 
 func (slp *ChatRoom) Process(jsip *rtclib.JSIP) {
@@ -111,7 +150,9 @@ func (slp *ChatRoom) onMsg(m *msg) {
 	}
 
 	roomid := m.req.To
+	ctx.roomsLock.RLock()
 	room := ctx.rooms[roomid]
+	ctx.roomsLock.RUnlock()
 
 	if room != nil {
 		room.msgs <- m
@@ -121,7 +162,9 @@ func (slp *ChatRoom) onMsg(m *msg) {
 	if m.req.Type == rtclib.SUBSCRIBE && expire > 0 {
 		room = newRoom(roomid, slp.qsize, time.Duration(expire)*time.Second,
 			slp.task)
+		ctx.roomsLock.Lock()
 		ctx.rooms[roomid] = room
+		ctx.roomsLock.Unlock()
 		room.msgs <- m
 		return
 	}
@@ -142,8 +185,10 @@ func (slp *ChatRoom) roomManager() {
 
 		case name := <-ctx.roomdel:
 			// room need to deleted
+			ctx.roomsLock.Lock()
 			delete(ctx.rooms, name)
 			log.Printf("All users quit room %s %v\n", name, ctx.rooms)
+			ctx.roomsLock.Unlock()
 		}
 	}
 }
