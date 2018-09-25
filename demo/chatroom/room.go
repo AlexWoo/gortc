@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"rtclib"
 	"sync"
 	"time"
@@ -85,7 +84,7 @@ func (r *room) delUser(u *user) bool {
 
 	r.usersLock.Lock()
 	delete(r.users, u.userid)
-	log.Printf("Delete user %s, %v", u.userid, r.users)
+	r.task.LogInfo("Delete user %s, %v", u.userid, r.users)
 	r.usersLock.Unlock()
 
 	r.usersLock.RLock()
@@ -132,10 +131,10 @@ func (r *room) processSubscriber(sub *msg) {
 			r.users[userid] = user
 			r.usersLock.Unlock()
 			sub.res <- rtclib.JSIPMsgRes(sub.req, 200)
-			log.Printf("User %s register in %s", userid, r.name)
+			r.task.LogInfo("User %s register in %s", userid, r.name)
 		} else {
 			sub.res <- rtclib.JSIPMsgRes(sub.req, 404)
-			log.Printf("User %s not register in %s", userid, r.name)
+			r.task.LogError("User %s not register in %s", userid, r.name)
 		}
 
 		return
@@ -158,7 +157,7 @@ func (r *room) processMessage(mess *msg) {
 	r.usersLock.RUnlock()
 	if user == nil {
 		mess.res <- rtclib.JSIPMsgRes(mess.req, 404)
-		log.Printf("User %s not register in %s when receive Message",
+		r.task.LogError("User %s not register in %s when receive Message",
 			userid, r.name)
 
 		return

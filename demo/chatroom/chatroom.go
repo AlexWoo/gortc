@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"rtclib"
 	"sync"
 	"time"
@@ -109,7 +108,7 @@ func (slp *ChatRoom) Process(jsip *rtclib.JSIP) {
 		timer.Stop()
 	case <-timer.C:
 		resp := rtclib.JSIPMsgRes(jsip, 408)
-		log.Printf("Process msg %s expire\n", jsip.Abstract())
+		slp.task.LogError("Process msg %s expire\n", jsip.Abstract())
 		rtclib.SendMsg(resp)
 	}
 
@@ -136,7 +135,7 @@ func (slp *ChatRoom) onMsg(m *msg) {
 		expr, ok := m.req.GetInt("Expire")
 		if !ok {
 			m.res <- rtclib.JSIPMsgRes(m.req, 400)
-			log.Printf("Receive SUBSCRIBE but no expire")
+			slp.task.LogError("Receive SUBSCRIBE but no expire")
 			return
 		}
 		expire = expr
@@ -145,7 +144,7 @@ func (slp *ChatRoom) onMsg(m *msg) {
 	_, ok := m.req.GetString("P-Asserted-Identity")
 	if !ok {
 		m.res <- rtclib.JSIPMsgRes(m.req, 400)
-		log.Printf("Receive %s but no P-Asserted-Identity", m.req.Name())
+		slp.task.LogError("Receive %s but no P-Asserted-Identity", m.req.Name())
 		return
 	}
 
@@ -171,7 +170,7 @@ func (slp *ChatRoom) onMsg(m *msg) {
 
 	resp := rtclib.JSIPMsgRes(m.req, 404)
 	m.res <- resp
-	log.Printf("Receive msg %s, but no room found", m.req.Abstract())
+	slp.task.LogError("Receive msg %s, but no room found", m.req.Abstract())
 }
 
 func (slp *ChatRoom) roomManager() {
@@ -187,7 +186,7 @@ func (slp *ChatRoom) roomManager() {
 			// room need to deleted
 			ctx.roomsLock.Lock()
 			delete(ctx.rooms, name)
-			log.Printf("All users quit room %s %v\n", name, ctx.rooms)
+			slp.task.LogError("All users quit room %s %v\n", name, ctx.rooms)
 			ctx.roomsLock.Unlock()
 		}
 	}
