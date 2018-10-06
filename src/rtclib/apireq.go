@@ -25,6 +25,25 @@ type APIRequest struct {
 	c      *http.Client
 }
 
+// Get body from response or request
+func APIBody(r io.Reader) (map[string]interface{}, error) {
+	body, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !gjson.ValidBytes(body) {
+		return nil, fmt.Errorf("body must be json, %s", string(body))
+	}
+
+	res, ok := gjson.ParseBytes(body).Value().(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("body must be json object, %s", string(body))
+	}
+
+	return res, nil
+}
+
 // New API Request
 func NewAPIRequest(method string, url string, header map[string]string,
 	body *map[string]interface{}, timeout time.Duration) *APIRequest {
@@ -71,23 +90,14 @@ func (r *APIRequest) Do() (*APIResponse, error) {
 		resp: resp,
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	res, err := APIBody(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	if !gjson.ValidBytes(body) {
-		return apiresp, fmt.Errorf("body must be json, %s", string(body))
-	}
-
-	res, ok := gjson.ParseBytes(body).Value().(map[string]interface{})
-	if !ok {
-		return apiresp, fmt.Errorf("body must be json object, %s", string(body))
-	}
-
 	code, ok := res["code"].(float64)
 	if !ok {
-		return apiresp, fmt.Errorf("body has no code, %s", string(body))
+		return apiresp, fmt.Errorf("body has no code, %v", res)
 	}
 
 	apiresp.code = int(code)
