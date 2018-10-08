@@ -11,6 +11,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -23,6 +25,67 @@ type APIRequest struct {
 	header map[string]string
 	body   *map[string]interface{}
 	c      *http.Client
+}
+
+// Get method from request
+func APIMethod(req *http.Request) string {
+	return req.Method
+}
+
+// Get uri from request
+func APIUris(req *http.Request) []string {
+	uris := strings.Split(req.URL.Path, "/")
+
+	if len(uris) <= 1 {
+		return []string{}
+	}
+
+	return uris[1:]
+}
+
+// Get query string from request
+func APIParaString(req *http.Request, key string) (string, error) {
+	v := req.URL.Query()[key]
+	if len(v) == 0 {
+		return "", fmt.Errorf("no %s para", key)
+	}
+
+	return v[0], nil
+}
+
+// Get query string from request
+func APIParaInt(req *http.Request, key string) (int, error) {
+	v := req.URL.Query()[key]
+	if len(v) == 0 {
+		return 0, fmt.Errorf("no %s para", key)
+	}
+
+	i, err := strconv.Atoi(v[0])
+	if err != nil {
+		return 0, err
+	}
+
+	return i, nil
+}
+
+// Get query string from request
+func APIParaBool(req *http.Request, key string) (bool, error) {
+	v := req.URL.Query()[key]
+	if len(v) == 0 {
+		return false, fmt.Errorf("no %s para", key)
+	}
+
+	return true, nil
+}
+
+// Get query string from request
+func APIParaSecond(req *http.Request, key string) (time.Time, error) {
+	i, err := APIParaInt(req, key)
+	if err != nil {
+		return time.Unix(0, 0), err
+	}
+
+	return time.Unix(int64(i), 0), nil
 }
 
 // Get body from response or request
