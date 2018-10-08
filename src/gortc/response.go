@@ -42,7 +42,7 @@ func newResponse(code int, headers *map[string]string, body interface{},
 		c, ok = syscode[code]
 	}
 	if !ok {
-		return newResponse(4, nil, nil, nil)
+		return newResponse(5, nil, nil, nil)
 	}
 
 	// init resp
@@ -105,9 +105,9 @@ func (resp *response) setBody(code int, msg string, body interface{}) {
 	}
 
 	//TODO logErr
-	resp.status = syscode[5].Status
-	resp.body["code"] = 5
-	resp.body["msg"] = syscode[5].Msg
+	resp.status = syscode[6].Status
+	resp.body["code"] = 6
+	resp.body["msg"] = syscode[6].Msg
 	return
 }
 
