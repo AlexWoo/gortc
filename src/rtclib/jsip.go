@@ -366,6 +366,7 @@ type JSIP struct {
 	conn        golib.Conn
 	Transaction *JSIPTrasaction
 	Session     *JSIPSession
+	Userid      string
 }
 
 // Get jsip name
@@ -826,15 +827,19 @@ func (m *JSIPStack) transactionID(jsip *JSIP, cseq uint64) string {
 	return jsip.DialogueID + "_" + strconv.FormatUint(cseq, 10)
 }
 
-func (m *JSIPStack) connect(uri string) *golib.WSConn {
+func (m *JSIPStack) connect(uri string, userid string) *golib.WSConn {
 	jsipUri, err := ParseJSIPUri(uri)
 	if err != nil {
 		m.log.LogError(m, "Parse uri %s error: %v", uri, err)
 		return nil
 	}
 
+	if userid == "" {
+		userid = m.dconfig.Realm
+	}
+
 	url := "ws://" + jsipUri.HostWithPort + m.dconfig.Location + "?userid=" +
-		m.dconfig.Realm
+		userid
 	conn := golib.NewWSClient(jsipUri.UserWithHost, url, m.dconfig.ConnTimeout,
 		int(m.dconfig.Retry), m.config.Qsize, RecvMsg, m.log, m.logLevel)
 
@@ -1593,9 +1598,9 @@ func (m *JSIPStack) sendJSIPMsg_t(jsip *JSIP) {
 	if jsip.conn == nil {
 		var conn *golib.WSConn
 		if len(jsip.Router) > 0 {
-			conn = m.connect(jsip.Router[0])
+			conn = m.connect(jsip.Router[0], jsip.Userid)
 		} else {
-			conn = m.connect(jsip.RequestURI)
+			conn = m.connect(jsip.RequestURI, jsip.Userid)
 		}
 
 		if conn == nil {
