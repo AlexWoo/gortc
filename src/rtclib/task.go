@@ -114,6 +114,7 @@ func (t *Task) run() {
 
 		if t.quit {
 			t.taskq <- t
+			return
 		}
 	}
 }
