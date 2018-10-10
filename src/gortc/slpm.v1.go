@@ -19,7 +19,12 @@ func Slpmv1() rtclib.API {
 func (api *SLPM_V1) Get(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, sm.listSLP(), nil
+	switch paras {
+	case "slps":
+		return -1, nil, sm.listSLP(), nil
+	}
+
+	return 3, nil, nil, nil
 }
 
 func (api *SLPM_V1) Post(req *http.Request, paras string) (int,

@@ -19,7 +19,12 @@ func Apimv1() rtclib.API {
 func (api *APIM_V1) Get(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
-	return -1, nil, am.listAPI(), nil
+	switch paras {
+	case "apis":
+		return -1, nil, am.listAPI(), nil
+	}
+
+	return 3, nil, nil, nil
 }
 
 func (api *APIM_V1) Post(req *http.Request, paras string) (int,
