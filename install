@@ -17,6 +17,28 @@ usage: $exec [options]
 END
 }
 
+install_service()
+{
+    release=`cat /etc/redhat-release | awk '{print $4}' |awk -F '.' '{print $1}'`
+    if [ "$release" == '7' ];then
+        sed "s#\[InstallPath\]#$InstallPath#g" gortc.service > /lib/systemd/system/gortc.service
+    else
+        echo "Only support CentOS7"
+        exit 1
+    fi
+}
+
+create_user()
+{
+    grep "^gortc" /etc/passwd >& /dev/null
+    if [ $? -ne 0 ];then
+        useradd gortc -M -r -s /sbin/nologin
+    fi
+
+    mkdir -p $InstallPath/logs
+    chown -R gortc:gortc $InstallPath
+}
+
 help=no
 
 for option
@@ -89,3 +111,6 @@ do
 done
 
 export GOPATH="$OLDGOPATH"
+
+create_user
+install_service

@@ -1,0 +1,21 @@
+[Unit]
+Description=gortc
+After=syslog.target network.target
+
+[Service]
+User=gortc
+Group=gortc
+Type=forking
+PIDFile=
+ExecStart=[InstallPath]/bin/gortc
+ExecStopPost=
+Restart=always
+
+LimitCORE=infinity
+LimitNOFILE=infinity
+LimitRTPRIO=infinity
+LimitRTTIME=infinity
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target
