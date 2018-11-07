@@ -13,6 +13,7 @@ usage: $exec [options]
     options:
         --help                  print this message
         --prefix=InstallPath    set installation prefix
+        --debug                 build with debug mode
 
 END
 }
@@ -40,6 +41,7 @@ create_user()
 }
 
 help=no
+debug=no
 
 for option
 do
@@ -52,6 +54,7 @@ do
         --help)         help=yes                                    ;;
         --prefix=)      InstallPath="!"                             ;;
         --prefix=*)     InstallPath="$value"                        ;;
+        --debug)        debug=yes                                   ;;
         *)
             echo "$exec: error: invalid option \"$option\""
             usage
@@ -85,7 +88,11 @@ cd $src
 go get
 
 # install
-go install
+if [ $debug == 'yes' ];then
+    go install -ldflags=-w -gcflags "-N -l"
+else
+    go install
+fi
 
 cd -
 
