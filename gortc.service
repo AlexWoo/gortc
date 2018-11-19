@@ -5,6 +5,7 @@ After=syslog.target network.target
 [Service]
 User=gortc
 Group=gortc
+Type=simple
 ExecStart=[InstallPath]/bin/gortc -d
 ExecStopPost=
 Restart=always
