@@ -173,7 +173,7 @@ func (m *rtcServer) Init() error {
 		m.config.Cert = rtclib.FullPath("certs/" + m.config.Cert)
 		m.config.Key = rtclib.FullPath("certs/" + m.config.Key)
 
-		s, err := golib.NewHTTPServer(m.config.Listen, m.config.Cert,
+		s, err := golib.NewHTTPServer(m.config.TlsListen, m.config.Cert,
 			m.config.Key, m.config.Location, m.dconfig.ClientHeaderTimeout,
 			m.dconfig.Keepalived, m.log, m.handler, accessFile)
 		if err != nil {
