@@ -39,6 +39,7 @@ const (
 	SUBSCRIBE
 	MESSAGE
 	TERM
+	NOTIFY
 )
 
 var jsipReqUnparse = map[string]int{
@@ -53,6 +54,7 @@ var jsipReqUnparse = map[string]int{
 	"PRACK":     PRACK,
 	"SUBSCRIBE": SUBSCRIBE,
 	"MESSAGE":   MESSAGE,
+	"NOTIFY":   NOTIFY,
 }
 
 var jsipReqParse = map[int]string{
@@ -67,6 +69,7 @@ var jsipReqParse = map[int]string{
 	PRACK:     "PRACK",
 	SUBSCRIBE: "SUBSCRIBE",
 	MESSAGE:   "MESSAGE",
+	NOTIFY: "NOTIFY",
 }
 
 var jsipResDesc = map[int]string{
@@ -1089,7 +1092,8 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 			if cancelTrans.Type != INVITE && cancelTrans.Type != REGISTER &&
 				cancelTrans.Type != OPTIONS && cancelTrans.Type != MESSAGE &&
-				cancelTrans.Type != SUBSCRIBE {
+				cancelTrans.Type != SUBSCRIBE &&
+				cancelTrans.Type != NOTIFY {
 
 				return IGNORE
 			}
@@ -1365,6 +1369,9 @@ func (m *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 		if jsip.Code == 200 && jsip.Type == INVITE {
 			session.State = INVITE_RE200
 			return OK
+		} else if jsip.Code >= 300 && jsip.Type == INVITE {
+			session.State = INVITE_ACK
+			return OK
 		}
 	case INVITE_RE200:
 		if jsip.Type == ACK {
@@ -1438,7 +1445,8 @@ func (m *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			return ERROR
 		} else if session.Type != INVITE && session.Type != REGISTER &&
 			session.Type != OPTIONS && session.Type != MESSAGE &&
-			session.Type != SUBSCRIBE {
+			session.Type != SUBSCRIBE &&
+			session.Type != NOTIFY {
 
 			m.log.LogError(jsip, "Session not exist when process msg %s",
 				jsip.Name())
