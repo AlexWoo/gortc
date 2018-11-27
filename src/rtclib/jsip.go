@@ -38,8 +38,8 @@ const (
 	PRACK
 	SUBSCRIBE
 	MESSAGE
-	TERM
 	NOTIFY
+	TERM
 )
 
 var jsipReqUnparse = map[string]int{
@@ -54,7 +54,7 @@ var jsipReqUnparse = map[string]int{
 	"PRACK":     PRACK,
 	"SUBSCRIBE": SUBSCRIBE,
 	"MESSAGE":   MESSAGE,
-	"NOTIFY":   NOTIFY,
+	"NOTIFY":    NOTIFY,
 }
 
 var jsipReqParse = map[int]string{
@@ -69,7 +69,7 @@ var jsipReqParse = map[int]string{
 	PRACK:     "PRACK",
 	SUBSCRIBE: "SUBSCRIBE",
 	MESSAGE:   "MESSAGE",
-	NOTIFY: "NOTIFY",
+	NOTIFY:    "NOTIFY",
 }
 
 var jsipResDesc = map[int]string{
@@ -1092,8 +1092,7 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 
 			if cancelTrans.Type != INVITE && cancelTrans.Type != REGISTER &&
 				cancelTrans.Type != OPTIONS && cancelTrans.Type != MESSAGE &&
-				cancelTrans.Type != SUBSCRIBE &&
-				cancelTrans.Type != NOTIFY {
+				cancelTrans.Type != SUBSCRIBE && cancelTrans.Type != NOTIFY {
 
 				return IGNORE
 			}
@@ -1445,8 +1444,7 @@ func (m *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 			return ERROR
 		} else if session.Type != INVITE && session.Type != REGISTER &&
 			session.Type != OPTIONS && session.Type != MESSAGE &&
-			session.Type != SUBSCRIBE &&
-			session.Type != NOTIFY {
+			session.Type != SUBSCRIBE && session.Type != NOTIFY {
 
 			m.log.LogError(jsip, "Session not exist when process msg %s",
 				jsip.Name())
