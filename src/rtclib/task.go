@@ -124,6 +124,12 @@ func (t *Task) SetCtx(ctx interface{}) {
 }
 
 func (t *Task) OnMsg(jsip *JSIP) {
+	if jsip != nil {
+		if _, ok := t.dlgs[jsip.DialogueID]; !ok {
+			t.dlgs[jsip.DialogueID] = nil
+		}
+	}
+
 	t.msgs <- jsip
 }
 
