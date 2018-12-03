@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -33,6 +35,8 @@ type rtcDConfig struct {
 	Keepalived          time.Duration `default:"60s"`
 	AccessFile          string        `default:"logs/access.log"`
 	Qsize               uint64        `default:"1024"`
+	Authurl             string
+	AuthTimeout         time.Duration `default:"3s"`
 }
 
 type rtcServer struct {
@@ -45,6 +49,13 @@ type rtcServer struct {
 	nServers  uint
 
 	taskQ chan *rtclib.Task
+}
+
+type authBody struct {
+	Type       string      `json:"type"`
+	RemoteAddr string      `json:"remoteaddr"`
+	Url        string      `json:"url"`
+	Headers    http.Header `json:"headers"`
 }
 
 var rtcs *rtcServer
@@ -96,7 +107,41 @@ func (m *rtcServer) initLog() error {
 // rtc handler
 
 func (m *rtcServer) wsCheckOrigin(r *http.Request) bool {
-	//Access Control from here
+	if m.dconfig.Authurl != "" {
+		// Construct auth request body
+		body := authBody{
+			Type:       "ws",
+			RemoteAddr: r.RemoteAddr,
+			Url:        r.RequestURI,
+			Headers:    r.Header,
+		}
+		b, _ := json.Marshal(body)
+		reader := bytes.NewReader(b)
+
+		// New HTTP Request
+		req, err := http.NewRequest("POST", m.dconfig.Authurl, reader)
+		if err != nil {
+			m.LogError("New auth request failed, %v", err)
+			return false
+		}
+
+		// Send HTTP Request and wait response
+		cli := &http.Client{
+			Timeout: m.dconfig.AuthTimeout,
+		}
+		resp, err := cli.Do(req)
+		if err != nil {
+			m.LogError("Auth failed, %v", err)
+			return false
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			m.LogError("Auth failed, receive status code %d", resp.StatusCode)
+			return false
+		}
+	}
+
 	return true
 }
 
