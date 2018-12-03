@@ -41,6 +41,8 @@ func (api *RUNTIME_V1) Get(req *http.Request, paras string) (int,
 		return -1, nil, stack(), nil
 	case "jstack": // JSIP Stack
 		return -1, nil, rtclib.JStackInstance().State(), nil
+	case "distribute": // Distribute Stack
+		return -1, nil, dist.State(), nil
 	}
 	return 3, nil, nil, nil
 }

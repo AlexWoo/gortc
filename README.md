@@ -75,6 +75,10 @@ GO RTC Server 配置文件使用安装目录下的 conf/gortc.ini 作为配置�
 
 	使用该接口可以看到 JSIP Stack 中挂起的事务和会话的 transactionid 和 sessionid
 
+	curl http://ip:apiport/runtime/v1/distribute
+
+	使用该接口可以看到分发表中挂起的对话和关联 ID 与 task 的对应关系
+
 ### API 加载
 
 API 的更详细介绍相见 [how to write api](doc/how_to_write_api.md)

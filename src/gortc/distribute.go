@@ -5,14 +5,16 @@
 package main
 
 import (
+	"fmt"
 	"rtclib"
 	"sync"
 )
 
 type distribute struct {
-	dlgtasks       map[string]*rtclib.Task
-	reltasks       map[string]*rtclib.Task
 	dlgTasksRWLock sync.RWMutex
+	dlgtasks       map[string]*rtclib.Task
+	relTasksRWLock sync.RWMutex
+	reltasks       map[string]*rtclib.Task
 	taskQ          chan *rtclib.Task
 	exit           chan bool
 }
@@ -32,6 +34,28 @@ func distInstance() *distribute {
 	}
 
 	return dist
+}
+
+func (m *distribute) State() string {
+	// dlgtasks
+	ret := "dlgtasks:{\n"
+	m.dlgTasksRWLock.RLock()
+	for k, v := range m.dlgtasks {
+		ret += fmt.Sprintf("    %s: %p\n", k, v)
+	}
+	m.dlgTasksRWLock.RUnlock()
+	ret += "}\n"
+
+	// reltasks
+	ret += "reltasks:{\n"
+	m.relTasksRWLock.RLock()
+	for k, v := range m.reltasks {
+		ret += fmt.Sprintf("    %s: %p\n", k, v)
+	}
+	m.relTasksRWLock.RUnlock()
+	ret += "}\n"
+
+	return ret
 }
 
 func (m *distribute) setdlg(dlg string, task *rtclib.Task) {
@@ -83,7 +107,9 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 		rid, ok := jsipUri.Paras["relid"].(string)
 		if ok && rid != "" {
 			relid = rid
+			m.relTasksRWLock.RLock()
 			task := m.reltasks[relid]
+			m.relTasksRWLock.RUnlock()
 			if task != nil {
 				m.setdlg(dlg, task)
 				task.OnMsg(jsip)
@@ -107,7 +133,9 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 
 	m.setdlg(dlg, task)
 	if relid != "" {
+		m.relTasksRWLock.Lock()
 		m.reltasks[relid] = task
+		m.relTasksRWLock.Unlock()
 	}
 	task.OnMsg(jsip)
 }
