@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexwoo/golib"
@@ -492,7 +493,9 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 	trans.timer = golib.NewTimer(jstack.dconfig.TransTimer,
 		trans.timerHandle, nil)
 
+	jstack.translock.Lock()
 	jstack.transactions[tid] = trans
+	jstack.translock.Unlock()
 	jsip.Transaction = trans
 
 	return trans
@@ -501,6 +504,8 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 func (trans *JSIPTrasaction) delete() {
 	trans.timer.Stop()
 
+	jstack.translock.Lock()
+	defer jstack.translock.Unlock()
 	delete(jstack.transactions, trans.tid)
 }
 
@@ -564,7 +569,9 @@ func newJSIPSess(jsip *JSIP, sendrecv int) *JSIPSession {
 		session.UAType = UAC
 	}
 
+	jstack.sesslock.Lock()
 	jstack.sessions[jsip.DialogueID] = session
+	jstack.sesslock.Unlock()
 	jsip.Session = session
 
 	switch session.Type {
@@ -594,6 +601,8 @@ func (sess *JSIPSession) delete() {
 		sess.sessTimer.Stop()
 	}
 
+	jstack.sesslock.Lock()
+	defer jstack.sesslock.Unlock()
 	delete(jstack.sessions, sess.dlg)
 }
 
@@ -684,7 +693,9 @@ type JSIPStack struct {
 	sessTimeout  chan *JSIPSession
 	close        chan bool
 
+	sesslock     sync.RWMutex
 	sessions     map[string]*JSIPSession
+	translock    sync.RWMutex
 	transactions map[string]*JSIPTrasaction
 }
 
@@ -735,6 +746,28 @@ func (m *JSIPStack) loadConfig() error {
 func (m *JSIPStack) SetLog(log *golib.Log, logLevel int) {
 	m.log = log
 	m.logLevel = logLevel
+}
+
+func (m *JSIPStack) State() string {
+	// transactions
+	ret := "transactions:[\n"
+	m.translock.RLock()
+	for k := range m.transactions {
+		ret += "    " + k + "\n"
+	}
+	m.translock.RUnlock()
+	ret += "]\n"
+
+	// sessions
+	ret += "sessions:[\n"
+	m.sesslock.RLock()
+	for k := range m.sessions {
+		ret += "    " + k + "\n"
+	}
+	m.sesslock.RUnlock()
+	ret += "]\n"
+
+	return ret
 }
 
 // for module interface
@@ -997,7 +1030,9 @@ func (stack *JSIPStack) jsipPrepared(jsip *JSIP) (*JSIP, error) {
 // Transaction Layer
 func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	tid := m.transactionID(jsip, jsip.CSeq)
+	m.translock.RLock()
 	trans := m.transactions[tid]
+	m.translock.RUnlock()
 	jsip.Transaction = trans
 
 	if trans == nil { // Request
@@ -1018,7 +1053,9 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			ackid := m.transactionID(jsip, uint64(rid))
+			m.translock.RLock()
 			ackTrans := m.transactions[ackid]
+			m.translock.RUnlock()
 			if ackTrans == nil {
 				m.log.LogInfo(jsip, "Transaction INVITE not exist")
 				return IGNORE
@@ -1054,7 +1091,9 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			cancelid := m.transactionID(jsip, uint64(rid))
+			m.translock.RLock()
 			cancelTrans := m.transactions[cancelid]
+			m.translock.RUnlock()
 			if cancelTrans == nil {
 				trans.delete()
 
@@ -1494,7 +1533,9 @@ func (m *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 		return OK
 	}
 
+	m.sesslock.RLock()
 	session := m.sessions[jsip.DialogueID]
+	m.sesslock.RUnlock()
 	jsip.Session = session
 
 	if session == nil {

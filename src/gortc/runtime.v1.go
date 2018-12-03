@@ -37,8 +37,10 @@ func (api *RUNTIME_V1) Get(req *http.Request, paras string) (int,
 	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
 
 	switch paras {
-	case "stack":
+	case "stack": // GO Stack
 		return -1, nil, stack(), nil
+	case "jstack": // JSIP Stack
+		return -1, nil, rtclib.JStackInstance().State(), nil
 	}
 	return 3, nil, nil, nil
 }

@@ -71,6 +71,10 @@ GO RTC Server 配置文件使用安装目录下的 conf/gortc.ini 作为配置�
 
 	使用该接口可以看到当前系统堆栈情况，可以通过该命令确定当前是否有非预期的协程挂起，该 Restfule 接口是内置接口，不可删除
 
+	curl http://ip:apiport/runtime/v1/jstack
+
+	使用该接口可以看到 JSIP Stack 中挂起的事务和会话的 transactionid 和 sessionid
+
 ### API 加载
 
 API 的更详细介绍相见 [how to write api](doc/how_to_write_api.md)
