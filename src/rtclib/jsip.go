@@ -427,7 +427,7 @@ func (jsip *JSIP) GetInt(header string) (int64, bool) {
 
 // Set jsip header with integer
 func (jsip *JSIP) SetInt(header string, value int64) {
-	jsip.RawMsg[header] = value
+	jsip.RawMsg[header] = float64(value)
 }
 
 // Get jsip header with type string
