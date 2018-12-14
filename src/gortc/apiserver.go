@@ -106,7 +106,22 @@ func (m *apiServer) callAPI(req *http.Request, apiname string, version string,
 	paras string) (int, *map[string]string, interface{},
 	*map[int]rtclib.RespCode) {
 
-	api := am.getAPI(apiname + "." + version)
+	// API Call Access Phase
+	// access.v1 is a special api for access auth
+	// if load in apiserver, apiserver will call it Post interface first
+	// if auth successd, go on to call indicated api
+	// otherwise denied the api request
+	api := am.getAPI("access.v1")
+	if api != nil {
+		code, _, msg, _ := api.Post(req, paras)
+		if code != 0 { // code == 0, auth successd, otherwise, auth failed
+			m.LogError("access failed, code %d, msg: %v", code, msg)
+			return 7, nil, nil, nil
+		}
+	}
+
+	// API Call Content Phase
+	api = am.getAPI(apiname + "." + version)
 	if api == nil {
 		return 3, nil, nil, nil
 	}

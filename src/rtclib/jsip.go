@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexwoo/golib"
@@ -426,7 +428,7 @@ func (jsip *JSIP) GetInt(header string) (int64, bool) {
 
 // Set jsip header with integer
 func (jsip *JSIP) SetInt(header string, value int64) {
-	jsip.RawMsg[header] = value
+	jsip.RawMsg[header] = float64(value)
 }
 
 // Get jsip header with type string
@@ -465,7 +467,6 @@ type JSIPTrasaction struct {
 	State  int
 	UAType int
 	req    *JSIP
-	cseq   uint64
 	tid    string
 
 	timer *golib.Timer
@@ -478,7 +479,6 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 		Type:  jsip.Type,
 		State: TRANS_REQ,
 		req:   jsip,
-		cseq:  jsip.CSeq,
 		tid:   tid,
 	}
 
@@ -492,7 +492,9 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 	trans.timer = golib.NewTimer(jstack.dconfig.TransTimer,
 		trans.timerHandle, nil)
 
+	jstack.translock.Lock()
 	jstack.transactions[tid] = trans
+	jstack.translock.Unlock()
 	jsip.Transaction = trans
 
 	return trans
@@ -501,6 +503,8 @@ func newJSIPTrans(tid string, jsip *JSIP, sendrecv int) *JSIPTrasaction {
 func (trans *JSIPTrasaction) delete() {
 	trans.timer.Stop()
 
+	jstack.translock.Lock()
+	defer jstack.translock.Unlock()
 	delete(jstack.transactions, trans.tid)
 }
 
@@ -522,10 +526,7 @@ func (trans *JSIPTrasaction) timeout() {
 	if trans.UAType == UAS {
 		cancel := JSIPMsgCancel(trans.req)
 		cancel.inner = true
-		if cancel.Session != nil {
-			cancel.Session.cseq++
-			cancel.CSeq = cancel.Session.cseq
-		}
+		cancel.CSeq = uint64(rand.Uint32())
 		jstack.recvq_t <- cancel
 	} else {
 		resp := JSIPMsgRes(trans.req, 408)
@@ -540,7 +541,6 @@ type JSIPSession struct {
 	UAType  int
 	req     *JSIP
 	dlg     string
-	cseq    uint64
 	handler func(session *JSIPSession, jsip *JSIP, sendrecv int) int
 
 	expire    time.Duration
@@ -564,7 +564,9 @@ func newJSIPSess(jsip *JSIP, sendrecv int) *JSIPSession {
 		session.UAType = UAC
 	}
 
+	jstack.sesslock.Lock()
 	jstack.sessions[jsip.DialogueID] = session
+	jstack.sesslock.Unlock()
 	jsip.Session = session
 
 	switch session.Type {
@@ -594,6 +596,8 @@ func (sess *JSIPSession) delete() {
 		sess.sessTimer.Stop()
 	}
 
+	jstack.sesslock.Lock()
+	defer jstack.sesslock.Unlock()
 	delete(jstack.sessions, sess.dlg)
 }
 
@@ -610,8 +614,7 @@ func (sess *JSIPSession) errorHandle() {
 		// Send BYE to application layer
 		bye := JSIPMsgBye(sess)
 		bye.inner = true
-		sess.cseq++
-		bye.CSeq = sess.cseq
+		bye.CSeq = uint64(rand.Uint32())
 		jstack.recvq_t <- bye
 
 		return
@@ -622,8 +625,7 @@ func (sess *JSIPSession) errorHandle() {
 		// Send CANCEL to application layer
 		cancel := JSIPMsgCancel(sess.req)
 		cancel.inner = true
-		sess.cseq++
-		cancel.CSeq = sess.cseq
+		cancel.CSeq = uint64(rand.Uint32())
 		jstack.recvq_t <- cancel
 	} else {
 		// Send INVITE_408 to application layer
@@ -645,8 +647,7 @@ func (sess *JSIPSession) sessionTimer() {
 			sess.errorHandle()
 		} else {
 			update := JSIPMsgUpdate(sess)
-			sess.cseq++
-			update.CSeq = sess.cseq
+			update.CSeq = uint64(rand.Uint32())
 			jstack.sendq_t <- update
 			sess.err = true
 		}
@@ -684,7 +685,9 @@ type JSIPStack struct {
 	sessTimeout  chan *JSIPSession
 	close        chan bool
 
+	sesslock     sync.RWMutex
 	sessions     map[string]*JSIPSession
+	translock    sync.RWMutex
 	transactions map[string]*JSIPTrasaction
 }
 
@@ -702,6 +705,8 @@ func JStackInstance() *JSIPStack {
 		sessions:     make(map[string]*JSIPSession),
 		transactions: make(map[string]*JSIPTrasaction),
 	}
+
+	rand.Seed(time.Now().Unix())
 
 	return jstack
 }
@@ -735,6 +740,28 @@ func (m *JSIPStack) loadConfig() error {
 func (m *JSIPStack) SetLog(log *golib.Log, logLevel int) {
 	m.log = log
 	m.logLevel = logLevel
+}
+
+func (m *JSIPStack) State() string {
+	// transactions
+	ret := "transactions:[\n"
+	m.translock.RLock()
+	for k := range m.transactions {
+		ret += "    " + k + "\n"
+	}
+	m.translock.RUnlock()
+	ret += "]\n"
+
+	// sessions
+	ret += "sessions:[\n"
+	m.sesslock.RLock()
+	for k := range m.sessions {
+		ret += "    " + k + "\n"
+	}
+	m.sesslock.RUnlock()
+	ret += "]\n"
+
+	return ret
 }
 
 // for module interface
@@ -997,7 +1024,9 @@ func (stack *JSIPStack) jsipPrepared(jsip *JSIP) (*JSIP, error) {
 // Transaction Layer
 func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 	tid := m.transactionID(jsip, jsip.CSeq)
+	m.translock.RLock()
 	trans := m.transactions[tid]
+	m.translock.RUnlock()
 	jsip.Transaction = trans
 
 	if trans == nil { // Request
@@ -1018,7 +1047,9 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			ackid := m.transactionID(jsip, uint64(rid))
+			m.translock.RLock()
 			ackTrans := m.transactions[ackid]
+			m.translock.RUnlock()
 			if ackTrans == nil {
 				m.log.LogInfo(jsip, "Transaction INVITE not exist")
 				return IGNORE
@@ -1054,7 +1085,9 @@ func (m *JSIPStack) jsipTransaction(jsip *JSIP, sendrecv int) int {
 			}
 
 			cancelid := m.transactionID(jsip, uint64(rid))
+			m.translock.RLock()
 			cancelTrans := m.transactions[cancelid]
+			m.translock.RUnlock()
 			if cancelTrans == nil {
 				trans.delete()
 
@@ -1212,8 +1245,6 @@ func (m *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 
 		if session.State >= INVITE_200 {
 			bye := JSIPMsgBye(session)
-			session.cseq++
-			bye.CSeq = session.cseq
 
 			SendMsg(bye)
 
@@ -1222,8 +1253,6 @@ func (m *JSIPStack) jsipInviteSession(session *JSIPSession, jsip *JSIP,
 
 		if session.UAType == UAC {
 			cancel := JSIPMsgCancel(session.req)
-			session.cseq++
-			cancel.CSeq = session.cseq
 
 			SendMsg(cancel)
 		} else {
@@ -1406,8 +1435,6 @@ func (m *JSIPStack) jsipDefaultSession(session *JSIPSession, jsip *JSIP,
 
 		if session.UAType == UAC {
 			cancel := JSIPMsgCancel(session.req)
-			session.cseq++
-			cancel.CSeq = session.cseq
 
 			SendMsg(cancel)
 		} else {
@@ -1494,7 +1521,9 @@ func (m *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 		return OK
 	}
 
+	m.sesslock.RLock()
 	session := m.sessions[jsip.DialogueID]
+	m.sesslock.RUnlock()
 	jsip.Session = session
 
 	if session == nil {
@@ -1507,11 +1536,8 @@ func (m *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
-		if sendrecv == RECV {
-			session.cseq = jsip.CSeq
-		} else {
-			session.cseq++
-			jsip.CSeq = session.cseq
+		if sendrecv == SEND {
+			jsip.CSeq = uint64(rand.Uint32())
 		}
 	}
 
@@ -1689,7 +1715,6 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 		RequestURI: req.RequestURI,
 		From:       req.From,
 		To:         req.To,
-		CSeq:       req.CSeq,
 		DialogueID: dlg,
 		Router:     req.Router,
 		Body:       copyBody(req.Body),
@@ -1738,10 +1763,6 @@ func JSIPMsgAck(resp *JSIP) *JSIP {
 	}
 
 	ack.SetInt("RelatedID", int64(resp.CSeq))
-
-	if resp.Session == nil {
-		ack.CSeq = resp.Transaction.cseq + 1
-	}
 
 	return ack
 }
@@ -1795,10 +1816,6 @@ func JSIPMsgCancel(req *JSIP) *JSIP {
 	}
 
 	cancel.SetInt("RelatedID", int64(req.CSeq))
-
-	if req.Session == nil {
-		cancel.CSeq = req.CSeq + 1
-	}
 
 	return cancel
 }

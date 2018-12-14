@@ -21,6 +21,7 @@ var syscode = map[int]rtclib.RespCode{
 	4:  {Status: 500, Msg: "API Error"},
 	5:  {Status: 500, Msg: "Unsuppoted err code"},
 	6:  {Status: 500, Msg: "Unsuppoted ret body"},
+	7:  {Status: 403, Msg: "Access denied"},
 }
 
 type response struct {
