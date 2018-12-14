@@ -30,7 +30,7 @@ type Task struct {
 	relid  string
 	msgs   chan *JSIP
 	taskq  chan *Task
-	quit   bool
+	quit   chan bool
 	setdlg func(dlg string, task *Task)
 
 	log      *golib.Log
@@ -50,6 +50,7 @@ func NewTask(relid string, taskq chan *Task,
 		setdlg:   setdlg,
 		log:      log,
 		logLevel: logLevel,
+		quit:     make(chan bool, 1),
 	}
 
 	go t.run()
@@ -87,7 +88,7 @@ func (t *Task) GetCtx() interface{} {
 
 // Terminate SLP instance
 func (t *Task) SetFinished() {
-	t.quit = true
+	t.quit <- true
 }
 
 func (t *Task) run() {
@@ -99,20 +100,20 @@ func (t *Task) run() {
 	}()
 
 	for {
-		msg := <-t.msgs
-		if msg == nil {
-			t.Process(msg)
-			continue
-		}
+		select {
+		case msg := <-t.msgs:
+			if msg == nil {
+				t.Process(msg)
+				continue
+			}
 
-		entry := t.dlgs[msg.DialogueID]
-		if entry == nil {
-			t.Process(msg)
-		} else {
-			entry(msg)
-		}
-
-		if t.quit {
+			entry := t.dlgs[msg.DialogueID]
+			if entry == nil {
+				t.Process(msg)
+			} else {
+				entry(msg)
+			}
+		case <-t.quit:
 			t.taskq <- t
 			return
 		}
