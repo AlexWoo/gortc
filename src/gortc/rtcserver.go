@@ -188,6 +188,8 @@ func (m *rtcServer) PreInit() error {
 
 	rtclib.JStackInstance().SetLog(m.log, m.logLevel)
 
+	golib.AddReloader("rtcserver", m)
+
 	return nil
 }
 
@@ -305,14 +307,6 @@ func (m *rtcServer) Reload() error {
 		return err
 	}
 
-	if err := m.initLog(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *rtcServer) Reopen() error {
 	if err := m.initLog(); err != nil {
 		return err
 	}

@@ -155,13 +155,11 @@ func (m *apiServer) PreInit() error {
 		return err
 	}
 
-	if err := m.loadDConfig(); err != nil {
+	if err := m.Reload(); err != nil {
 		return err
 	}
 
-	if err := m.initLog(); err != nil {
-		return err
-	}
+	golib.AddReloader("apiserver", m)
 
 	return nil
 }
@@ -278,14 +276,6 @@ func (m *apiServer) Reload() error {
 		return err
 	}
 
-	if err := m.initLog(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *apiServer) Reopen() error {
 	if err := m.initLog(); err != nil {
 		return err
 	}
