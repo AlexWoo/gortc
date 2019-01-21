@@ -777,9 +777,11 @@ func (m *JSIPStack) PreInit() error {
 		return err
 	}
 
-	if err := m.loadDConfig(); err != nil {
+	if err := m.Reload(); err != nil {
 		return err
 	}
+
+	golib.AddReloader("jsipstack", m)
 
 	return nil
 }
@@ -832,10 +834,6 @@ func (m *JSIPStack) Reload() error {
 		return err
 	}
 
-	return nil
-}
-
-func (m *JSIPStack) Reopen() error {
 	return nil
 }
 

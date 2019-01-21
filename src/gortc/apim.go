@@ -93,14 +93,6 @@ func (m *apim) PreMainloop() error {
 func (m *apim) Mainloop() {
 }
 
-func (m *apim) Reload() error {
-	return nil
-}
-
-func (m *apim) Reopen() error {
-	return nil
-}
-
 func (m *apim) Exit() {
 }
 

@@ -6,6 +6,7 @@ package rtclib
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/alexwoo/golib"
 	uuid "github.com/satori/go.uuid"
@@ -23,15 +24,17 @@ type SLP interface {
 }
 
 type Task struct {
-	Name   string
-	SLP    SLP
-	ctx    interface{}
-	dlgs   map[string]func(jsip *JSIP)
-	relid  string
-	msgs   chan *JSIP
-	taskq  chan *Task
-	quit   bool
-	setdlg func(dlg string, task *Task)
+	Name  string
+	SLP   SLP
+	ctx   interface{}
+	msgs  chan *JSIP
+	taskq chan *Task
+	quit  bool
+
+	// DialogueID, RelID will save in relids table
+	relids     map[string]func(jsip *JSIP)
+	relLock    sync.RWMutex
+	setRelated func(id string, task *Task)
 
 	log      *golib.Log
 	logLevel int
@@ -39,17 +42,16 @@ type Task struct {
 	Process func(jsip *JSIP)
 }
 
-func NewTask(relid string, taskq chan *Task,
-	setdlg func(dlg string, task *Task), log *golib.Log, logLevel int) *Task {
+func NewTask(taskq chan *Task, setRelated func(dlg string, task *Task),
+	log *golib.Log, logLevel int) *Task {
 
 	t := &Task{
-		dlgs:     make(map[string]func(jsip *JSIP)),
-		relid:    relid,
-		msgs:     make(chan *JSIP, 1024),
-		taskq:    taskq,
-		setdlg:   setdlg,
-		log:      log,
-		logLevel: logLevel,
+		msgs:       make(chan *JSIP, 1024),
+		taskq:      taskq,
+		relids:     make(map[string]func(jsip *JSIP)),
+		setRelated: setRelated,
+		log:        log,
+		logLevel:   logLevel,
 	}
 
 	go t.run()
@@ -59,11 +61,14 @@ func NewTask(relid string, taskq chan *Task,
 
 // New a jsip DialogueID for sending a new jsip session
 func (t *Task) NewDialogueID() string {
-	u1, _ := uuid.NewV4()
-	dlg := jstack.dconfig.Realm + u1.String()
+	u4, _ := uuid.NewV4()
+	dlg := "dlg_" + jstack.dconfig.Realm + "_" + u4.String()
 
-	t.dlgs[dlg] = nil
-	t.setdlg(dlg, t)
+	t.relLock.Lock()
+	t.relids[dlg] = nil
+	t.relLock.Unlock()
+
+	t.setRelated(dlg, t)
 
 	return dlg
 }
@@ -71,13 +76,34 @@ func (t *Task) NewDialogueID() string {
 // New a jsip DialogueID with jsip msg process entry,
 // for sending a new jsip session
 func (t *Task) NewDialogueIDWithEntry(process func(*JSIP)) string {
-	u1, _ := uuid.NewV4()
-	dlg := jstack.dconfig.Realm + u1.String()
+	u4, _ := uuid.NewV4()
+	dlg := "dlg_" + jstack.dconfig.Realm + "_" + u4.String()
 
-	t.dlgs[dlg] = process
-	t.setdlg(dlg, t)
+	t.relLock.Lock()
+	t.relids[dlg] = process
+	t.relLock.Unlock()
+
+	t.setRelated(dlg, t)
 
 	return dlg
+}
+
+// New a relid with jsip msg process entry
+// relid is used to trigger service by rtcbroker:
+// 		relid fill in the second Router of request sent to service
+// 		service send new request back to rtcbroker with second Router
+//		gortc can send the request to rtcbroker instance by this relid
+func (t *Task) NewRelIDWithEntry(process func(*JSIP)) string {
+	u4, _ := uuid.NewV4()
+	relid := "rel" + jstack.dconfig.Realm + "+" + u4.String()
+
+	t.relLock.Lock()
+	t.relids[relid] = process
+	t.relLock.Unlock()
+
+	t.setRelated(relid, t)
+
+	return relid
 }
 
 // Get SLP ctx
@@ -99,22 +125,61 @@ func (t *Task) run() {
 	}()
 
 	for {
+		if t.quit {
+			t.taskq <- t
+			return
+		}
+
 		msg := <-t.msgs
+
+		// Onload when slp load into system
 		if msg == nil {
 			t.Process(msg)
 			continue
 		}
 
-		entry := t.dlgs[msg.DialogueID]
+		t.relLock.RLock()
+		entry, ok := t.relids[msg.DialogueID]
+		if ok { // old DialogueID
+			if entry == nil {
+				t.Process(msg)
+			} else {
+				entry(msg)
+			}
+
+			continue
+		}
+		t.relLock.RUnlock()
+
+		// new DialogueID
+
+		// get relid
+		relid := ""
+		if len(msg.Router) > 0 {
+			jsipUri, _ := ParseJSIPUri(msg.Router[0])
+
+			rid, ok := jsipUri.Paras["relid"].(string)
+			if ok && rid != "" {
+				relid = rid
+			}
+		}
+
+		if relid != "" {
+			t.relLock.Lock()
+			entry = t.relids[relid]
+			// New DialogueID use same entry with it's relid
+			t.relids[msg.DialogueID] = entry
+			t.relLock.Unlock()
+		} else {
+			t.relLock.RLock()
+			entry = t.relids[msg.DialogueID]
+			t.relLock.RUnlock()
+		}
+
 		if entry == nil {
 			t.Process(msg)
 		} else {
 			entry(msg)
-		}
-
-		if t.quit {
-			t.taskq <- t
-			return
 		}
 	}
 }
@@ -124,26 +189,19 @@ func (t *Task) SetCtx(ctx interface{}) {
 }
 
 func (t *Task) OnMsg(jsip *JSIP) {
-	if jsip != nil {
-		if _, ok := t.dlgs[jsip.DialogueID]; !ok {
-			t.dlgs[jsip.DialogueID] = nil
-		}
-	}
-
 	t.msgs <- jsip
 }
 
-func (t *Task) GetDlgs() []string {
-	dlgs := make([]string, len(t.dlgs))
-	for dlg, _ := range t.dlgs {
-		dlgs = append(dlgs, dlg)
+func (t *Task) GetRelids() []string {
+	t.relLock.RLock()
+	defer t.relLock.RUnlock()
+
+	relids := make([]string, len(t.relids))
+	for id := range t.relids {
+		relids = append(relids, id)
 	}
 
-	return dlgs
-}
-
-func (t *Task) GetRelid() string {
-	return t.relid
+	return relids
 }
 
 // for log ctx

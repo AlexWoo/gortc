@@ -104,14 +104,6 @@ func (m *slpm) PreMainloop() error {
 func (m *slpm) Mainloop() {
 }
 
-func (m *slpm) Reload() error {
-	return nil
-}
-
-func (m *slpm) Reopen() error {
-	return nil
-}
-
 func (m *slpm) Exit() {
 }
 
@@ -160,7 +152,7 @@ func (m *slpm) slpLoad(name string, slpFile string) error {
 	m.slps[name] = slp
 
 	// SLP Init Process when loaded
-	t := rtclib.NewTask("", dist.taskQ, dist.setdlg, rtcs.log, rtcs.logLevel)
+	t := rtclib.NewTask(dist.taskQ, dist.setRelated, rtcs.log, rtcs.logLevel)
 	t.Name = name
 	m.getSLP(t, SLPONLOAD)
 	if t.SLP == nil {

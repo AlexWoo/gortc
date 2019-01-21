@@ -54,16 +54,11 @@ func (m *mainModule) initLog() error {
 // for module interface
 
 func (m *mainModule) PreInit() error {
-	if err := m.loadDConfig(); err != nil {
+	if err := m.Reload(); err != nil {
 		return err
 	}
 
-	if err := m.initLog(); err != nil {
-		return err
-	}
-
-	ms := golib.NewModules()
-	ms.SetLog(m.log.Log())
+	golib.AddReloader("main", m)
 
 	return nil
 }
@@ -90,19 +85,10 @@ func (m *mainModule) Reload() error {
 		return err
 	}
 
-	ms := golib.NewModules()
-	ms.SetLog(m.log.Log())
-
-	return nil
-}
-
-func (m *mainModule) Reopen() error {
-	if err := m.initLog(); err != nil {
-		return err
-	}
+	logPath := rtclib.FullPath(m.dconfig.LogFile)
 
 	ms := golib.NewModules()
-	ms.SetLog(m.log.Log())
+	ms.SetLog(logPath, m.logLevel)
 
 	return nil
 }

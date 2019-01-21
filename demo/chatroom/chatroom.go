@@ -14,9 +14,8 @@ type msg struct {
 }
 
 type ctx struct {
-	msgs    chan *msg         // msg send to room
-	resp    chan *rtclib.JSIP // resp for req
-	roomdel chan string       // room name wait for delete
+	msgs    chan *msg   // msg send to room
+	roomdel chan string // room name wait for delete
 
 	// key: room name, value: room, for room manager
 	rooms     map[string]*room
@@ -77,7 +76,6 @@ func (slp *ChatRoom) NewSLPCtx() interface{} {
 
 	c = &ctx{
 		msgs:    make(chan *msg, slp.qsize),
-		resp:    make(chan *rtclib.JSIP),
 		roomdel: make(chan string),
 		rooms:   make(map[string]*room),
 	}
@@ -116,15 +114,11 @@ func (slp *ChatRoom) Process(jsip *rtclib.JSIP) {
 }
 
 func (slp *ChatRoom) OnLoad(jsip *rtclib.JSIP) {
-	ctx := slp.task.GetCtx().(*ctx)
-
 	if jsip == nil {
 		go slp.roomManager()
 
 		return
 	}
-
-	ctx.resp <- jsip
 }
 
 func (slp *ChatRoom) onMsg(m *msg) {
