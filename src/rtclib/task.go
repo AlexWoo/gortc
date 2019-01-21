@@ -29,7 +29,7 @@ type Task struct {
 	ctx   interface{}
 	msgs  chan *JSIP
 	taskq chan *Task
-	quit  bool
+	quit  chan bool
 
 	// DialogueID, RelID will save in relids table
 	relids     map[string]func(jsip *JSIP)
@@ -48,6 +48,7 @@ func NewTask(taskq chan *Task, setRelated func(dlg string, task *Task),
 	t := &Task{
 		msgs:       make(chan *JSIP, 1024),
 		taskq:      taskq,
+		quit:       make(chan bool, 1),
 		relids:     make(map[string]func(jsip *JSIP)),
 		setRelated: setRelated,
 		log:        log,
@@ -113,7 +114,7 @@ func (t *Task) GetCtx() interface{} {
 
 // Terminate SLP instance
 func (t *Task) SetFinished() {
-	t.quit = true
+	t.quit <- true
 }
 
 func (t *Task) run() {
@@ -125,61 +126,62 @@ func (t *Task) run() {
 	}()
 
 	for {
-		if t.quit {
-			t.taskq <- t
-			return
-		}
+		select {
+		case msg := <-t.msgs:
 
-		msg := <-t.msgs
+			// Onload when slp load into system
+			if msg == nil {
+				t.Process(msg)
+				continue
+			}
 
-		// Onload when slp load into system
-		if msg == nil {
-			t.Process(msg)
-			continue
-		}
+			t.relLock.RLock()
+			entry, ok := t.relids[msg.DialogueID]
+			if ok { // old DialogueID
+				if entry == nil {
+					t.Process(msg)
+				} else {
+					entry(msg)
+				}
 
-		t.relLock.RLock()
-		entry, ok := t.relids[msg.DialogueID]
-		if ok { // old DialogueID
+				continue
+			}
+			t.relLock.RUnlock()
+
+			// new DialogueID
+
+			// get relid
+			relid := ""
+			if len(msg.Router) > 0 {
+				jsipUri, _ := ParseJSIPUri(msg.Router[0])
+
+				rid, ok := jsipUri.Paras["relid"].(string)
+				if ok && rid != "" {
+					relid = rid
+				}
+			}
+
+			if relid != "" {
+				t.relLock.Lock()
+				entry = t.relids[relid]
+				// New DialogueID use same entry with it's relid
+				t.relids[msg.DialogueID] = entry
+				t.relLock.Unlock()
+			} else {
+				t.relLock.RLock()
+				entry = t.relids[msg.DialogueID]
+				t.relLock.RUnlock()
+			}
+
 			if entry == nil {
 				t.Process(msg)
 			} else {
 				entry(msg)
 			}
 
-			continue
-		}
-		t.relLock.RUnlock()
-
-		// new DialogueID
-
-		// get relid
-		relid := ""
-		if len(msg.Router) > 0 {
-			jsipUri, _ := ParseJSIPUri(msg.Router[0])
-
-			rid, ok := jsipUri.Paras["relid"].(string)
-			if ok && rid != "" {
-				relid = rid
-			}
-		}
-
-		if relid != "" {
-			t.relLock.Lock()
-			entry = t.relids[relid]
-			// New DialogueID use same entry with it's relid
-			t.relids[msg.DialogueID] = entry
-			t.relLock.Unlock()
-		} else {
-			t.relLock.RLock()
-			entry = t.relids[msg.DialogueID]
-			t.relLock.RUnlock()
-		}
-
-		if entry == nil {
-			t.Process(msg)
-		} else {
-			entry(msg)
+		case <-t.quit:
+			t.taskq <- t
+			return
 		}
 	}
 }
