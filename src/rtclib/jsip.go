@@ -1534,7 +1534,7 @@ func (m *JSIPStack) jsipSession(jsip *JSIP, sendrecv int) int {
 	}
 
 	if jsip.Code == 0 {
-		if sendrecv == SEND {
+		if sendrecv == SEND && jsip.CSeq == 0 {
 			jsip.CSeq = uint64(rand.Uint32())
 		}
 	}
@@ -1717,6 +1717,10 @@ func JSIPMsgClone(req *JSIP, dlg string) *JSIP {
 		Router:     req.Router,
 		Body:       copyBody(req.Body),
 		RawMsg:     copyMap(req.RawMsg),
+	}
+
+	if msg.Code == 0 {
+		msg.CSeq = uint64(rand.Uint32())
 	}
 
 	return msg
