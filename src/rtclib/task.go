@@ -144,6 +144,8 @@ func (t *Task) run() {
 					entry(msg)
 				}
 
+				t.relLock.RUnlock()
+
 				continue
 			}
 			t.relLock.RUnlock()
