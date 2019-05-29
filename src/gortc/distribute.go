@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"rtclib"
+	"strings"
 	"sync"
 )
 
@@ -55,6 +56,22 @@ func (m *distribute) setRelated(id string, task *rtclib.Task) {
 	defer m.relLock.Unlock()
 
 	m.relids[id] = task
+}
+
+func (m *distribute) getSrvNameByUri(uri string) string {
+	jsipUri, err := rtclib.ParseJSIPUri(uri)
+	if err != nil {
+		return "default"
+	}
+
+	service := strings.Split(jsipUri.Host, ".")[0]
+
+	p := sm.getSLPByName(service)
+	if p == nil {
+		return "default"
+	}
+
+	return service
 }
 
 func (m *distribute) process(jsip *rtclib.JSIP) {
@@ -118,7 +135,11 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 		name, ok := jsipUri.Paras["type"].(string)
 		if ok && name != "" {
 			slpname = name
+		} else {
+			slpname = m.getSrvNameByUri(jsipUri.Host)
 		}
+	} else {
+		slpname = m.getSrvNameByUri(jsip.RequestURI)
 	}
 
 	// get task by slpname

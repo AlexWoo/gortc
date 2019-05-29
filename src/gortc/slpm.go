@@ -193,6 +193,15 @@ func (m *slpm) delSLP(name string) string {
 	return fmt.Sprintf("Delete SLP %s successd\n", name)
 }
 
+func (m *slpm) getSLPByName(name string) *slpPlugin {
+	p := m.slps[name]
+	if p == nil {
+		return nil
+	}
+
+	return p
+}
+
 func (m *slpm) getSLP(t *rtclib.Task, stage int) {
 	p := m.slps[t.Name]
 	if p == nil {
