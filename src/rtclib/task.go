@@ -148,6 +148,7 @@ func (t *Task) run() {
 
 				continue
 			}
+			t.relids[msg.DialogueID] = nil
 			t.relLock.RUnlock()
 
 			// new DialogueID
