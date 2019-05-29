@@ -401,7 +401,7 @@ func (jsip *JSIP) Abstract() string {
 	if len(jsip.Router) > 0 {
 		abstract += " Router: " + jsip.Router[0]
 		for i := 1; i < len(jsip.Router); i++ {
-			abstract += "," + jsip.Router[0]
+			abstract += "," + jsip.Router[i]
 		}
 	}
 
