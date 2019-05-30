@@ -39,6 +39,8 @@ type Task struct {
 	log      *golib.Log
 	logLevel int
 
+	TermNotify bool
+
 	Process func(jsip *JSIP)
 }
 
@@ -53,6 +55,7 @@ func NewTask(taskq chan *Task, setRelated func(dlg string, task *Task),
 		setRelated: setRelated,
 		log:        log,
 		logLevel:   logLevel,
+		TermNotify: false,
 	}
 
 	go t.run()
@@ -138,6 +141,14 @@ func (t *Task) run() {
 			t.relLock.RLock()
 			entry, ok := t.relids[msg.DialogueID]
 			if ok { // old DialogueID
+				if msg.Type == TERM {
+					delete(t.relids, msg.DialogueID)
+					if !t.TermNotify {
+						t.relLock.RUnlock()
+						continue
+					}
+				}
+
 				if entry == nil {
 					t.Process(msg)
 				} else {

@@ -57,6 +57,7 @@ var jsipReqUnparse = map[string]int{
 	"SUBSCRIBE": SUBSCRIBE,
 	"MESSAGE":   MESSAGE,
 	"NOTIFY":    NOTIFY,
+	"TERM":      TERM,
 }
 
 var jsipReqParse = map[int]string{
@@ -72,6 +73,7 @@ var jsipReqParse = map[int]string{
 	SUBSCRIBE: "SUBSCRIBE",
 	MESSAGE:   "MESSAGE",
 	NOTIFY:    "NOTIFY",
+	TERM:      "TERM",
 }
 
 var jsipResDesc = map[int]string{
@@ -667,7 +669,6 @@ type jsipDConfig struct {
 	PRTimer      time.Duration `default:"60s"`
 	SessionLayer bool          `default:"true"`
 	SessionTimer time.Duration `default:"600s"`
-	TermNotify   bool          `default:"false"`
 }
 
 type JSIPStack struct {
@@ -1585,7 +1586,7 @@ func (m *JSIPStack) recvJSIPMsg_s(jsip *JSIP) {
 	m.log.LogDebug(jsip, "Recv: %s", jsip.Abstract())
 	m.jsipC <- jsip
 
-	if ret == DONE && m.dconfig.TermNotify {
+	if ret == DONE {
 		m.recvJSIPTerm(jsip.DialogueID)
 	}
 }
@@ -1602,7 +1603,7 @@ func (m *JSIPStack) sendJSIPMsg_s(jsip *JSIP) {
 
 	m.sendq_t <- jsip
 
-	if ret == DONE && m.dconfig.TermNotify {
+	if ret == DONE {
 		m.recvJSIPTerm(jsip.DialogueID)
 	}
 }

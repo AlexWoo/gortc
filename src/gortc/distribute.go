@@ -81,8 +81,13 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 	m.relLock.RLock()
 	task := m.relids[dlg]
 	if task != nil {
-		task.OnMsg(jsip)
+		if jsip.Type == rtclib.TERM {
+			delete(m.relids, dlg)
+		}
 		m.relLock.RUnlock()
+
+		task.OnMsg(jsip)
+
 		return
 	}
 	m.relLock.RUnlock()
@@ -91,6 +96,10 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 
 	if jsip.Code > 0 {
 		rtcs.LogError("Receive %s but SLP is finished", jsip.Name())
+		return
+	}
+
+	if jsip.Type == rtclib.TERM {
 		return
 	}
 
