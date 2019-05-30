@@ -1,0 +1,20 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "a": 1,
+        "b": true,
+        "abcd": "Hello World"
+    },
+    "tag": "abc"
+},
+
+{
+    "type": "recv",
+    "value": {
+        "var": "Hello World"
+    }
+}
+
+]

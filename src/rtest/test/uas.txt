@@ -1,0 +1,30 @@
+[
+
+{
+    "type": "recv",
+    "value": {
+        "a": 1,
+        "b": true
+    },
+    "tag": "abc",
+    "vars": {
+        "$_a123": "abcd"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "test": "hello"
+    },
+    "timeout": "2s",
+    "vars": {
+        "var": "$_a123"
+    }
+},
+
+{
+    "type": "end"
+}
+
+]
