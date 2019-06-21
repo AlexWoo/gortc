@@ -1682,13 +1682,13 @@ func RecvMsg(conn golib.Conn, data []byte) {
 // Send Msg to jsip stack
 func SendMsg(jsip *JSIP) {
 	jstack.log.LogDebug(jsip, "Send: %s", jsip.Abstract())
-	jsip, err := jstack.jsipPrepared(jsip)
+	newjsip, err := jstack.jsipPrepared(jsip)
 	if err != nil {
 		jstack.log.LogError(jsip, "jsipPrepared err %s", err)
 		return
 	}
 
-	jstack.sendq_s <- jsip
+	jstack.sendq_s <- newjsip
 }
 
 // Send Term msg, jsip stack will transfer term msg to JSIP end msg
