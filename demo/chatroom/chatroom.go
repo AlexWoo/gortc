@@ -106,7 +106,7 @@ func (slp *ChatRoom) Process(jsip *rtclib.JSIP) {
 		timer.Stop()
 	case <-timer.C:
 		resp := rtclib.JSIPMsgRes(jsip, 408)
-		slp.task.LogError("Process msg %s expire\n", jsip.Abstract())
+		slp.task.LogError("Process msg %s expire\n", jsip.String())
 		rtclib.SendMsg(resp)
 	}
 
@@ -164,7 +164,7 @@ func (slp *ChatRoom) onMsg(m *msg) {
 
 	resp := rtclib.JSIPMsgRes(m.req, 404)
 	m.res <- resp
-	slp.task.LogError("Receive msg %s, but no room found", m.req.Abstract())
+	slp.task.LogError("Receive msg %s, but no room found", m.req.String())
 }
 
 func (slp *ChatRoom) roomManager() {
