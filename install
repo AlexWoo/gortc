@@ -116,11 +116,12 @@ do
     fi
 done
 
-bins="pcompile"
+bins="pcompile apim slpm"
 
 for f in $bins
 do
     install bin/$f $InstallPath/bin/$f -m 755
+    sed -i "s#^path=.*#path=$InstallPath#" $InstallPath/bin/$f
 done
 
 export GOPATH="$OLDGOPATH"
