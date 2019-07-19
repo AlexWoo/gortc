@@ -121,6 +121,8 @@ func (s *jsipSession) processCancel(m *JSIP) (jsipSessionState, error) {
 		s.init.msg <- JSIPMsgRes(m, 200)
 		s.init.msg <- JSIPMsgRes(s.req, 487)
 
+		s.timer.Reset(s.init.transTimer)
+
 		return INVITE_ERR, nil
 	} else {
 		s.cancelled = true

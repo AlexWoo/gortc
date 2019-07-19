@@ -76,7 +76,11 @@ func createTransaction(m *JSIP, init *jsipTransInit, log *golib.Log) *jsipTransa
 		tid := transactionID(t.req.DialogueID, t.req.CSeq)
 		t.init.term <- tid
 	} else {
-		t.timer = golib.NewTimer(t.init.transTimer, t.timerHandle, nil)
+		if m.Type == INVITE {
+			t.timer = golib.NewTimer(2*t.init.prTimer, t.timerHandle, nil)
+		} else {
+			t.timer = golib.NewTimer(t.init.transTimer, t.timerHandle, nil)
+		}
 	}
 
 	return t
@@ -136,7 +140,11 @@ func (t *jsipTransaction) onMsg(m *JSIP) {
 	}
 
 	if state == TRANS_PROVISIONALRESP {
-		t.timer.Reset(t.init.prTimer)
+		if t.req.Type == INVITE {
+			t.timer.Reset(2 * t.init.prTimer)
+		} else {
+			t.timer.Reset(t.init.prTimer)
+		}
 	}
 
 	t.state = state

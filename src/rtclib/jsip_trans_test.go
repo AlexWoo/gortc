@@ -216,7 +216,7 @@ func TestINVITETransaction(t *testing.T) {
 		check{msg: resp, ignore: true},
 		check{typ: INVITE, code: 408, recv: true},
 	}
-	testTransaction(msg, ct, 1*time.Second)
+	testTransaction(msg, ct, 6*time.Second)
 
 	fmt.Println("++++++++++Send")
 	msg.recv = false
@@ -226,7 +226,7 @@ func TestINVITETransaction(t *testing.T) {
 		check{msg: resp180, typ: INVITE, code: 180, recv: true},
 		check{msg: resp200, typ: INVITE, code: 200, recv: true},
 	}
-	testTransaction(msg, ct, 0*time.Second)
+	testTransaction(msg, ct, 0)
 
 	fmt.Println("++++++++++Send Error")
 	msg.recv = false
@@ -234,14 +234,14 @@ func TestINVITETransaction(t *testing.T) {
 	ct = []check{
 		check{msg: resp500, typ: INVITE, code: 500, recv: true},
 	}
-	testTransaction(msg, ct, 0*time.Second)
+	testTransaction(msg, ct, 0)
 
 	fmt.Println("++++++++++Send Timeout 1")
 	msg.recv = false
 	ct = []check{
 		check{typ: INVITE, code: 408, recv: true},
 	}
-	testTransaction(msg, ct, 1*time.Second)
+	testTransaction(msg, ct, 6*time.Second)
 
 	fmt.Println("++++++++++Send Timeout 2")
 	msg.recv = false
@@ -250,7 +250,7 @@ func TestINVITETransaction(t *testing.T) {
 		check{msg: resp180, typ: INVITE, code: 180, recv: true},
 		check{typ: INVITE, code: 408, recv: true},
 	}
-	testTransaction(msg, ct, 3*time.Second)
+	testTransaction(msg, ct, 6*time.Second)
 
 	fmt.Println("++++++++++Recv")
 	msg.recv = true
@@ -258,7 +258,7 @@ func TestINVITETransaction(t *testing.T) {
 	ct = []check{
 		check{msg: resp200, typ: INVITE, code: 200, recv: false},
 	}
-	testTransaction(msg, ct, 0*time.Second)
+	testTransaction(msg, ct, 0)
 
 	fmt.Println("++++++++++Recv Error")
 	msg.recv = true
@@ -266,14 +266,14 @@ func TestINVITETransaction(t *testing.T) {
 	ct = []check{
 		check{msg: resp500, typ: INVITE, code: 500, recv: false},
 	}
-	testTransaction(msg, ct, 0*time.Second)
+	testTransaction(msg, ct, 0)
 
 	fmt.Println("++++++++++Recv Timeout 1")
 	msg.recv = true
 	ct = []check{
 		check{typ: INVITE, code: 408, recv: false},
 	}
-	testTransaction(msg, ct, 1*time.Second)
+	testTransaction(msg, ct, 6*time.Second)
 
 	fmt.Println("++++++++++Recv Timeout 2")
 	msg.recv = true
@@ -282,7 +282,7 @@ func TestINVITETransaction(t *testing.T) {
 		check{msg: resp180, typ: INVITE, code: 180, recv: false},
 		check{typ: INVITE, code: 408, recv: false},
 	}
-	testTransaction(msg, ct, 3*time.Second)
+	testTransaction(msg, ct, 6*time.Second)
 }
 
 func TestREGISTERTransaction(t *testing.T) {

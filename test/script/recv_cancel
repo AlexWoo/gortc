@@ -4,13 +4,11 @@
     "type": "send",
     "value": {
         "Type": "INVITE",
-        "Request-URI": "room:test1@test.com",
-        "From": "Alex@test.com",
-        "To": "Alex@test.com",
+        "Request-URI": "Recv_CANCEL",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
         "DialogueID": "abcdefgh",
-        "RelatedID": 1,
         "CSeq": 1,
-        "Router": "a.test.com;type=slpdemo, b.test.com",
         "Body": "aaaa"
     }
 },
@@ -19,19 +17,17 @@
     "type": "send",
     "value": {
         "Type": "CANCEL",
-        "Request-URI": "room:test1@test.com",
-        "From": "Alex@test.com",
-        "To": "Alex@test.com",
+        "Request-URI": "CANCEL",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
         "DialogueID": "abcdefgh",
-        "RelatedID": 1,
-        "CSeq": 2,
-        "Router": "a.test.com;type=slpdemo, b.test.com",
-        "Body": "aaaa"
+        "CSeq": 2
     }
 },
 
 {
     "type": "recv",
+    "timeout": "1s",
     "value": {
         "Type": "RESPONSE",
         "Code": 200,
@@ -41,6 +37,7 @@
 
 {
     "type": "recv",
+    "timeout": "1s",
     "value": {
         "Type": "RESPONSE",
         "Code": 487,
@@ -52,12 +49,12 @@
     "type": "send",
     "value": {
         "Type": "ACK",
-        "Request-URI": "room:test1@test.com",
-        "From": "Alex@test.com",
-        "To": "Alex@test.com",
+        "Request-URI": "ACK",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
         "DialogueID": "abcdefgh",
-        "RelatedID": 1,
-        "CSeq": 3
+        "CSeq": 3,
+        "RelatedID": 1
     }
 }
 

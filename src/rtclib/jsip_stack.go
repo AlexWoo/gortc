@@ -279,14 +279,31 @@ func (s *JSIPStack) processSession(msg *JSIP) {
 		} else {
 			s.log.LogError(msg, "Recv msg but session[%s] does not exists", msg.DialogueID)
 
-			if msg.Code == 0 && msg.Type != ACK && msg.Type != TERM {
-				res := JSIPMsgRes(msg, 481)
-				s.sessq <- res
+			if msg.Code != 0 { // Response no session
+				return
 			}
+
+			if msg.Type == ACK || msg.Type == TERM { // ACK or TERM
+				return
+			}
+
+			if (msg.Type == BYE || msg.Type == CANCEL) && !msg.recv { // send BYE
+				return
+			}
+
+			s.log.LogInfo(msg, "Send 481 for msg")
+
+			res := JSIPMsgRes(msg, 481)
+			if !msg.recv {
+				res.recv = true
+			}
+			s.sessq <- res
 
 			return
 		}
 	}
+
+	msg.conn = sess.req.conn
 
 	sess.onMsg(msg)
 }

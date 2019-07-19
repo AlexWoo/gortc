@@ -1,0 +1,25 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "OPTIONS",
+        "Request-URI": "Send_Error_Msg",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200
+    }
+}
+
+]

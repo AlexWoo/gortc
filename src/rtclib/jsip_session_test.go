@@ -1071,7 +1071,7 @@ func TestTimeoutBefore200(t *testing.T) {
 		check{msg: ack, ignore: true},
 		check{typ: TERM, code: 0, recv: true},
 	}
-	testSession(m, ct, 6*time.Second)
+	testSession(m, ct, 3*time.Second)
 
 	fmt.Println("++++++++++Recv ACK timeout")
 	m.recv = true
@@ -1084,7 +1084,7 @@ func TestTimeoutBefore200(t *testing.T) {
 		check{typ: INVITE, code: 408, recv: false},
 		check{typ: TERM, code: 0, recv: true},
 	}
-	testSession(m, ct, 7*time.Second)
+	testSession(m, ct, 4*time.Second)
 
 	fmt.Println("++++++++++Send")
 	m.recv = false
@@ -1096,7 +1096,7 @@ func TestTimeoutBefore200(t *testing.T) {
 		check{typ: INVITE, code: 408, recv: true},
 		check{typ: TERM, code: 0, recv: true},
 	}
-	testSession(m, ct, 6*time.Second)
+	testSession(m, ct, 3*time.Second)
 }
 
 func TestCancel(t *testing.T) {

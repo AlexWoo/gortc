@@ -112,7 +112,7 @@ func createSession(m *JSIP, init *jsipSessionInit, log *golib.Log) *jsipSession 
 	}
 
 	// make sure transaction timer trigger first
-	s.timer = time.NewTimer(2 * s.init.prTimer)
+	s.timer = time.NewTimer(s.init.prTimer)
 
 	go s.loop()
 

@@ -1,0 +1,17 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "ACK",
+        "Request-URI": "ACK_no_session",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Router": "gortc.com;type=test",
+        "Body": "aaaa"
+    }
+}
+
+]

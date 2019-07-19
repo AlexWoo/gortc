@@ -265,14 +265,14 @@ func (m *JSIP) GetString(header string) (string, bool) {
 	return v, ok
 }
 
-// Delete a header from JSIP Message
-func (m *JSIP) DelHeader(header string) {
-	delete(m.rawMsg, header)
-}
-
 // Set a header with string value to JSIP Message
 func (m *JSIP) SetString(header string, value string) {
 	m.rawMsg[header] = value
+}
+
+// Delete a header from JSIP Message
+func (m *JSIP) DelHeader(header string) {
+	delete(m.rawMsg, header)
 }
 
 // Clone a jsip msg, using new dlg
