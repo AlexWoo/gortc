@@ -24,6 +24,11 @@ func usage() {
 	fmt.Printf("usage: %s -h\n", os.Args[0])
 	fmt.Printf("usage: %s [-d]\n", os.Args[0])
 	fmt.Printf("    -d    start backgroud\n")
+	fmt.Printf("    -s quit|stop|reopen|reload\n")
+	fmt.Printf("          quit: gortc quit directly\n")
+	fmt.Printf("          stop: gortc quit gracefully\n")
+	fmt.Printf("          reopen: gortc reopen logs\n")
+	fmt.Printf("          reload: gortc reload config\n")
 	os.Exit(1)
 }
 
@@ -54,6 +59,30 @@ func daemon() {
 	os.Exit(0)
 }
 
+func signal(cmd string) {
+	pid := readPIDFile()
+	if pid == -1 {
+		fmt.Println("read pidfile", pidfile, "failed")
+		os.Exit(-1)
+	}
+
+	switch cmd {
+	case "stop":
+		syscall.Kill(pid, syscall.SIGTERM)
+	case "quit":
+		syscall.Kill(pid, syscall.SIGQUIT)
+	case "reopen":
+		syscall.Kill(pid, syscall.SIGUSR1)
+	case "reload":
+		syscall.Kill(pid, syscall.SIGHUP)
+	default:
+		fmt.Println("Unknown command for gortc -s", cmd)
+		os.Exit(-1)
+	}
+
+	os.Exit(0)
+}
+
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
@@ -62,7 +91,7 @@ func writePIDFile() {
 	f, err := os.OpenFile(pidfile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
 	if err != nil {
 		fmt.Println("Write pid file failed", err)
-		os.Exit(0)
+		os.Exit(-1)
 	}
 
 	defer f.Close()
@@ -98,12 +127,14 @@ func unlinkPIDFile() {
 
 func main() {
 	opt := golib.NewOptParser()
-	for opt.GetOpt("hd") {
+	for opt.GetOpt("hds:") {
 		switch opt.Opt() {
 		case 'h':
 			usage()
 		case 'd':
 			daemon()
+		case 's':
+			signal(opt.OptVal())
 		case '?':
 			usage()
 		}
