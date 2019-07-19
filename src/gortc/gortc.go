@@ -43,7 +43,7 @@ func daemon() {
 	}
 
 	args := append([]string{os.Args[0]}, os.Args[1:]...)
-	_, err := os.StartProcess(os.Args[0], args,
+	_, err := os.StartProcess(rtclib.FullPath("bin/gortc"), args,
 		&os.ProcAttr{Files: []*os.File{os.Stdin, os.Stdout, os.Stderr}})
 
 	if err != nil {
