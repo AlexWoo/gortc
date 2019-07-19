@@ -25,7 +25,9 @@ type API interface {
 		*map[string]string, interface{}, *map[int]RespCode)
 }
 
-var RTCPATH string
+var (
+	RTCPATH = "/usr/local/gortc/"
+)
 
 func FullPath(path string) string {
 	if path == "" {

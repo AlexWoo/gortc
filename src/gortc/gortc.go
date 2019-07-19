@@ -10,13 +10,14 @@ import (
 	"os"
 	"rtclib"
 	"runtime"
+	"strconv"
 	"syscall"
 
 	"github.com/alexwoo/golib"
 )
 
 var (
-	rtcpath = "/usr/local/gortc/"
+	pidfile = rtclib.FullPath(".gortc.pid")
 )
 
 func usage() {
@@ -54,8 +55,45 @@ func daemon() {
 }
 
 func init() {
-	rtclib.RTCPATH = rtcpath
 	runtime.GOMAXPROCS(runtime.NumCPU())
+}
+
+func writePIDFile() {
+	f, err := os.OpenFile(pidfile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	if err != nil {
+		fmt.Println("Write pid file failed", err)
+		os.Exit(0)
+	}
+
+	defer f.Close()
+
+	f.WriteString(fmt.Sprintf("%d", os.Getpid()))
+}
+
+func readPIDFile() int {
+	f, err := os.Open(pidfile)
+	if err != nil {
+		return -1
+	}
+
+	defer f.Close()
+
+	b := make([]byte, 16)
+	l, err := f.Read(b)
+	if err != nil {
+		return -1
+	}
+
+	if pid, err := strconv.Atoi(string(b[:l])); err != nil {
+		fmt.Println(err)
+		return -1
+	} else {
+		return pid
+	}
+}
+
+func unlinkPIDFile() {
+	os.Remove(pidfile)
 }
 
 func main() {
@@ -71,6 +109,8 @@ func main() {
 		}
 	}
 
+	writePIDFile()
+
 	ms := golib.NewModules()
 
 	ms.AddModule("main", &mainModule{})
@@ -81,4 +121,6 @@ func main() {
 	ms.AddModule("slpmanager", slpmInstance())
 
 	ms.Start()
+
+	unlinkPIDFile()
 }

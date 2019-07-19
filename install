@@ -81,7 +81,7 @@ export GOPATH="$InstallPath"
 src=$InstallPath/src/gortc/
 mkdir -p $InstallPath
 cp -rf src $InstallPath
-sed -i "s#rtcpath = \".*\"#rtcpath = \"$InstallPath\"#" $InstallPath/src/gortc/gortc.go
+sed -i "s#RTCPATH = \".*\"#RTCPATH = \"$InstallPath\"#" $InstallPath/src/rtclib/base.go
 
 cd $src
 # get dependence
