@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+
+path=/usr/local/gortc
+. $path/bin/.api
+
+if [ "$api" == "" ];then
+    echo "$path/bin/.api not init"
+    exit -1
+fi
+
+api=$api/runtime/v1
+
+exec=`basename $0`
+
+usage()
+{
+cat << END
+
+usage: $exec stack|jstack|distribute|all|resource
+END
+
+    exit 1
+}
+
+stack()
+{
+    curl $api/stack
+}
+
+jstack()
+{
+    curl $api/jstack
+}
+
+distribute()
+{
+    curl $api/distribute
+}
+
+if [ $# -ne 1 ];then
+    usage
+fi
+
+if [ $1 == "all" ];then
+    jstack
+    distribute
+    stack
+    exit 0
+fi
+
+if [ $1 == "resource" ];then
+    jstack
+    distribute
+    exit 0
+fi
+
+if [ $1 == "stack" ];then
+    stack
+    exit 0
+fi
+
+if [ $1 == "jstack" ];then
+    jstack
+    exit 0
+fi
+
+if [ $1 == "distribute" ];then
+    distribute
+    exit 0
+fi
+
+usage

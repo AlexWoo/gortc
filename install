@@ -116,7 +116,7 @@ do
     fi
 done
 
-bins="pcompile apim slpm"
+bins="pcompile apim slpm rtcm"
 
 for f in $bins
 do
