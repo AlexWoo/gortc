@@ -1,0 +1,118 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "OPTIONS",
+        "Request-URI": "Send_INVITE_Session_Timeout",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "INVITE"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 180,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "Body": "aaaa"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "Body": "aaaa"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "ACK"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "UPDATE"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "UPDATE"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "UPDATE"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "BYE"
+    },
+    "vars": {
+        "$cseq": "CSeq"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+}
+
+]

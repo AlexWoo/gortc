@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+
+path=/usr/local/gortc
+. $path/bin/.api
+
+if [ "$api" == "" ];then
+    echo "$path/bin/.api not init"
+    exit -1
+fi
+
+api=$api/apim/v1
+
+exec=`basename $0`
+
+usage()
+{
+cat << END
+
+usage: $exec ls
+usage: $exec rm <apiname>.<apiversion>
+usage: $exec load <apiname>.<apiversion> <service>
+END
+
+    exit 1
+}
+
+list()
+{
+    curl $api/apis
+
+    exit 0
+}
+
+remove()
+{
+    flag=`echo $1 |awk /'^\w+\.v[1-9][0-9]*$/'`
+    if [ "$flag" == "" ];then
+        echo "<apiname>.<apiversion> format error"
+        return
+    fi
+
+    echo "curl -XDELETE $api/$1"
+    curl -XDELETE $api/$1
+
+    exit 0
+}
+
+load()
+{
+    flag=`echo $1 |awk /'^\w+\.v[1-9][0-9]*$/'`
+    if [ "$flag" == "" ];then
+        echo "<apiname>.<apiversion> format error"
+        return
+    fi
+
+    res=`ls $path/plugins/$2.so`
+    if [ "$res" != "" ];then
+        file=$2.so
+    else
+        res=`ls -lrt $path/plugins/$2-*.so | awk -F '/' 'END {print $NF}'`
+        if [ "$res" != "" ];then
+            file=$res
+        fi
+    fi
+
+    if [ "$file" == "" ];then
+        echo "cannot find service plugin file"
+        return
+    fi
+
+    echo "curl -XPOST $api/$1?file=$file"
+    curl -XPOST $api/$1?file=$file
+
+    exit 0
+}
+
+if [ $# -lt 1 ];then
+    usage
+fi
+
+if [ $1 == "ls" -a $# -eq 1 ];then
+    list
+fi
+
+if [ $1 == "rm" -a $# -eq 2 ];then
+    remove $2
+fi
+
+if [ $1 == "load" -a $# -eq 3 ];then
+    load $2 $3
+fi
+
+usage

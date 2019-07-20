@@ -14,6 +14,7 @@ import (
 type distribute struct {
 	relLock sync.RWMutex
 	relids  map[string]*rtclib.Task
+	msgC    chan *rtclib.JSIP
 	taskQ   chan *rtclib.Task
 	exit    chan bool
 }
@@ -27,6 +28,7 @@ func distInstance() *distribute {
 
 	dist = &distribute{
 		relids: make(map[string]*rtclib.Task),
+		msgC:   make(chan *rtclib.JSIP, 1024),
 		taskQ:  make(chan *rtclib.Task),
 		exit:   make(chan bool),
 	}
@@ -59,12 +61,12 @@ func (m *distribute) setRelated(id string, task *rtclib.Task) {
 }
 
 func (m *distribute) getSrvNameByUri(uri string) string {
-	jsipUri, err := rtclib.ParseJSIPUri(uri)
+	jsipUri, err := rtclib.NewJSIPUri(uri)
 	if err != nil {
 		return "default"
 	}
 
-	service := strings.Split(jsipUri.Host, ".")[0]
+	service := strings.Split(jsipUri.Hostport.Host, ".")[0]
 
 	p := sm.getSLPByName(service)
 	if p == nil {
@@ -115,14 +117,14 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 
 	// get relid
 	if len(jsip.Router) > 0 {
-		jsipUri, err := rtclib.ParseJSIPUri(jsip.Router[0])
+		jsipUri, err := rtclib.NewJSIPUri(jsip.Router[0])
 		if err != nil {
 			rtcs.LogError("Router[%s] format error, %v", jsip.Router[0], err)
 			rtclib.SendMsg(rtclib.JSIPMsgRes(jsip, 400))
 			return
 		}
 
-		rid, ok := jsipUri.Paras["relid"].(string)
+		rid, ok := jsipUri.Paras["relid"]
 		if ok && rid != "" {
 			// If has relid, but cannot find task, task has finished
 			m.relLock.RLock()
@@ -141,11 +143,11 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 			return
 		}
 
-		name, ok := jsipUri.Paras["type"].(string)
+		name, ok := jsipUri.Paras["type"]
 		if ok && name != "" {
 			slpname = name
 		} else {
-			slpname = m.getSrvNameByUri(jsipUri.Host)
+			slpname = m.getSrvNameByUri(jsipUri.Hostport.Host)
 		}
 	} else {
 		slpname = m.getSrvNameByUri(jsip.RequestURI)
@@ -164,6 +166,10 @@ func (m *distribute) process(jsip *rtclib.JSIP) {
 	m.setRelated(dlg, task)
 
 	task.OnMsg(jsip)
+}
+
+func (m *distribute) onMsg(msg *rtclib.JSIP) {
+	m.msgC <- msg
 }
 
 func (m *distribute) delTask(task *rtclib.Task) {
@@ -190,11 +196,11 @@ func (m *distribute) PreMainloop() error {
 }
 
 func (m *distribute) Mainloop() {
-	jsipC := rtclib.JStackInstance().JSIPChannel()
+	rtclib.JStackInstance().SetHandler(m.onMsg)
 
 	for {
 		select {
-		case jsip := <-jsipC:
+		case jsip := <-m.msgC:
 			m.process(jsip)
 		case task := <-m.taskQ:
 			m.delTask(task)

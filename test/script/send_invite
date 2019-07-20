@@ -1,0 +1,202 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "OPTIONS",
+        "Request-URI": "Send_INVITE",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "INVITE"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 180,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "Body": "aaaa"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "PRACK"
+    },
+    "vars": {
+        "$cseq1": "CSeq"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "Body": "aaaa"
+    },
+    "vars": {
+        "CSeq": "$cseq1",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "UPDATE",
+        "Request-URI": "UPDATE",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "CSeq": 3,
+        "Body": "aaaa"
+    },
+    "vars": {
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 3
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "Body": "aaaa"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "INVITE",
+        "Request-URI": "Re-INVITE",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "CSeq": 4,
+        "Body": "aaaa"
+    },
+    "vars": {
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "CSeq": 4
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "ACK",
+        "Request-URI": "ACK",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "CSeq": 5,
+        "Body": "aaaa"
+    },
+    "vars": {
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "UPDATE"
+    },
+    "vars": {
+        "$cseq": "CSeq"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "BYE"
+    },
+    "vars": {
+        "$cseq": "CSeq"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+}
+
+]

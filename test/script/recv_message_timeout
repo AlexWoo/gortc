@@ -1,0 +1,25 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "Recv_MESSAGE_Timeout",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 408,
+        "CSeq": 1
+    }
+}
+
+]

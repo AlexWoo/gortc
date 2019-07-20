@@ -66,7 +66,7 @@ func NewTask(taskq chan *Task, setRelated func(dlg string, task *Task),
 // New a jsip DialogueID for sending a new jsip session
 func (t *Task) NewDialogueID() string {
 	u4, _ := uuid.NewV4()
-	dlg := "dlg_" + jstack.dconfig.Realm + "_" + u4.String()
+	dlg := "dlg_" + jstack.config.Realm + "_" + u4.String()
 
 	t.relLock.Lock()
 	t.relids[dlg] = nil
@@ -81,7 +81,7 @@ func (t *Task) NewDialogueID() string {
 // for sending a new jsip session
 func (t *Task) NewDialogueIDWithEntry(process func(*JSIP)) string {
 	u4, _ := uuid.NewV4()
-	dlg := "dlg_" + jstack.dconfig.Realm + "_" + u4.String()
+	dlg := "dlg_" + jstack.config.Realm + "_" + u4.String()
 
 	t.relLock.Lock()
 	t.relids[dlg] = process
@@ -99,7 +99,7 @@ func (t *Task) NewDialogueIDWithEntry(process func(*JSIP)) string {
 //		gortc can send the request to rtcbroker instance by this relid
 func (t *Task) NewRelIDWithEntry(process func(*JSIP)) string {
 	u4, _ := uuid.NewV4()
-	relid := "rel" + jstack.dconfig.Realm + "+" + u4.String()
+	relid := "rel" + jstack.config.Realm + "+" + u4.String()
 
 	t.relLock.Lock()
 	t.relids[relid] = process
@@ -121,12 +121,12 @@ func (t *Task) SetFinished() {
 }
 
 func (t *Task) run() {
-	defer func() {
-		if err := recover(); err != nil {
-			t.LogError("task process err: %s", err)
-			t.taskq <- t
-		}
-	}()
+	//defer func() {
+	//	if err := recover(); err != nil {
+	//		t.LogError("task process err: %s", err)
+	//		t.taskq <- t
+	//	}
+	//}()
 
 	for {
 		select {
@@ -167,9 +167,9 @@ func (t *Task) run() {
 			// get relid
 			relid := ""
 			if len(msg.Router) > 0 {
-				jsipUri, _ := ParseJSIPUri(msg.Router[0])
+				jsipUri, _ := NewJSIPUri(msg.Router[0])
 
-				rid, ok := jsipUri.Paras["relid"].(string)
+				rid, ok := jsipUri.Paras["relid"]
 				if ok && rid != "" {
 					relid = rid
 				}

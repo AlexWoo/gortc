@@ -1,0 +1,82 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "OPTIONS",
+        "Request-URI": "Send_CANCEL",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "INVITE"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "CANCEL"
+    },
+    "vars": {
+        "$cseq1": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com"
+    },
+    "vars": {
+        "CSeq": "$cseq1",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 487,
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "ACK"
+    }
+}
+
+]

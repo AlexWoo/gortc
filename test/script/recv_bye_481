@@ -1,0 +1,26 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "BYE",
+        "Request-URI": "SLP_not_load",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
+        "DialogueID": "abcdefgh",
+        "CSeq": 1,
+        "Router": "gortc.com;type=test",
+        "Body": "aaaa"
+    }
+},
+
+{
+    "type": "recv",
+    "timeout": "1s",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 481
+    }
+}
+
+]

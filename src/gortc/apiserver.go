@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"rtclib"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexwoo/golib"
@@ -53,6 +54,38 @@ func apiServerInstance() *apiServer {
 	apis = &apiServer{}
 
 	return apis
+}
+
+func fullAddr(addr string) string {
+	split := strings.Split(addr, ":")
+
+	if split[0] == "" {
+		return "127.0.0.1" + addr
+	}
+
+	return addr
+}
+
+func (m *apiServer) writeAPIFile() {
+	apifile := rtclib.FullPath("bin/.api")
+	f, err := os.OpenFile(apifile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	if err != nil {
+		fmt.Println("Write pid file failed", err)
+		os.Exit(-1)
+	}
+	defer f.Close()
+
+	scheme := ""
+	addr := ""
+	if m.config.Listen != "" {
+		scheme = "http"
+		addr = fullAddr(m.config.Listen)
+	} else {
+		scheme = "https"
+		addr = fullAddr(m.config.TlsListen)
+	}
+
+	f.WriteString(fmt.Sprintf("api=%s://%s", scheme, addr))
 }
 
 func (m *apiServer) loadDConfig() error {
@@ -200,6 +233,8 @@ func (m *apiServer) Init() error {
 
 		m.nServers++
 	}
+
+	m.writeAPIFile()
 
 	return nil
 }

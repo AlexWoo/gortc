@@ -42,7 +42,7 @@ func (u *user) sendMessage(msg *rtclib.JSIP) {
 
 	select {
 	case res := <-u.res:
-		u.task.LogInfo("Recv MESSAGE result %s", res.Abstract())
+		u.task.LogInfo("Recv MESSAGE result %s", res.String())
 		t.Stop()
 	case <-t.C:
 		u.task.LogError("Send MESSAGE timeout")

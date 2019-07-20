@@ -2,80 +2,48 @@
 
 # Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 
+path=/usr/local/gortc
+
 exec=`basename $0`
 
 usage()
 {
 cat << END
 
-usage: $exec [options] slpdir
-
-    options:
-        --help                  print this message
-        --prefix=InstallPath    set installation prefix
+usage: $exec <service>
 
 END
+
+    exit 0
 }
 
-help=no
-
-for option
-do
-    case "$option" in
-        -*=*) value=`echo "$option" | sed -e 's/[-_a-zA-Z0-9]*=//'` ;;
-           *) value=`echo "$option"`                                ;;
-    esac
-
-    case "$option" in
-        --help)         help=yes                                    ;;
-        --prefix=)      InstallPath="!"                             ;;
-        --prefix=*)     InstallPath="$value"                        ;;
-        *)
-            if [ -n "$path" ];then
-                echo "$exec: error: invalid option \"$option\""
-                usage
-                exit 1
-            fi
-
-            path=$value
-        ;;
-    esac
-done
-
-if [ $help = yes ];then
+if [ $# -ne 1 ];then
     usage
-    exit 0
 fi
 
-case ".$InstallPath" in
-    .)  InstallPath=/usr/local/gortc    ;;
-    .!) InstallPath=/usr/local/gortc    ;;
-    *)                                  ;;
-esac
-
 OLDGOPATH="$GOPATH"
-export GOPATH="$InstallPath"
+export GOPATH="$path"
 
-slp=`basename $path`
-cd $path
-echo "start compile $slp with $path"
+slp=`basename $1`
+cd $1
+echo "start compile $slp with $1"
 
 go get
 
-echo "go build -ldflags \"-pluginpath=$slp-`date +%Y%m%d%H%M%S`\" -buildmode=plugin -o $InstallPath/plugins/$slp.so"
-go build -ldflags "-pluginpath=$slp-`date +%Y%m%d%H%M%S`" -buildmode=plugin -o $InstallPath/plugins/$slp.so
+echo "go build -ldflags \"-pluginpath=$slp-`date +%Y%m%d%H%M%S`\" -buildmode=plugin -o $path/plugins/$slp-`date +%Y%m%d%H%M%S`.so"
+go build -ldflags "-pluginpath=$slp-`date +%Y%m%d%H%M%S`" -buildmode=plugin -o $path/plugins/$slp-`date +%Y%m%d%H%M%S`.so
 
 cd -
 
 # slp conf
 if [ -d $path/conf ];then
-    mkdir -p $InstallPath/conf/$slp
-    echo "mkdir -p $InstallPath/conf/$slp"
+    mkdir -p $path/conf/$slp
+    echo "mkdir -p $path/conf/$slp"
 
-    confs=`ls $path/conf`
+    confs=`ls $1/conf`
     for f in $confs
     do
-        test -f $InstallPath/conf/$slp/$f || cp $path/conf/$f $InstallPath/conf/$slp/
+        test -f $1/conf/$slp/$f || cp $path/conf/$f $path/conf/$slp/
     done
 fi
 

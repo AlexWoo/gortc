@@ -3,10 +3,10 @@
 {
     "type": "send",
     "value": {
-        "Type": "INFO",
-        "Request-URI": "room:test1@test.com",
-        "From": "Alex@test.com",
-        "To": "Alex@test.com",
+        "Type": "OPTIONS",
+        "Request-URI": "Send_Resp_No_Session",
+        "From": "Alex@gortc.com",
+        "To": "Bob@gortc.com",
         "DialogueID": "abcdefgh",
         "CSeq": 1,
         "Body": "aaaa"
@@ -18,7 +18,7 @@
     "timeout": "1s",
     "value": {
         "Type": "RESPONSE",
-        "Code": 481
+        "Code": 200
     }
 }
 
