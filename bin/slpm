@@ -2,9 +2,15 @@
 
 # Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 
-#api=[api]
-api=http://127.0.0.1:2539/slpm/v1
 path=/usr/local/gortc
+. $path/bin/.api
+
+if [ "$api" == "" ];then
+    echo "$path/bin/.api not init"
+    exit -1
+fi
+
+api=$api/slpm/v1
 
 exec=`basename $0`
 
