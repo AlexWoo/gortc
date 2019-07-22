@@ -1,196 +1,150 @@
+// Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+//
+
+// ChatRoom demo
+// chatroom room
+
 package main
 
 import (
 	"rtclib"
 	"sync"
-	"time"
-
-	"github.com/alexwoo/golib"
 )
 
-type user struct {
-	userid   string
-	nickname string
-	timer    *golib.Timer
-	task     *rtclib.Task
-	res      chan *rtclib.JSIP
-}
-
-func (u *user) subTimeout(d interface{}) {
-	r := d.(*room)
-
-	r.quit <- u
-}
-
-func (u *user) result(res *rtclib.JSIP) {
-	u.res <- res
-}
-
-func (u *user) sendMessage(msg *rtclib.JSIP) {
-	dlg := u.task.NewDialogueIDWithEntry(u.result)
-	m := rtclib.JSIPMsgClone(msg, dlg)
-	m.RequestURI = u.userid
-
-	if len(m.Router) > 0 {
-		m.Router = m.Router[1:]
-	}
-
-	m.SetString("P-Asserted-Identity", rtclib.Realm())
-
-	rtclib.SendMsg(m)
-	t := time.NewTimer(5 * time.Second)
-
-	select {
-	case res := <-u.res:
-		u.task.LogInfo("Recv MESSAGE result %s", res.String())
-		t.Stop()
-	case <-t.C:
-		u.task.LogError("Send MESSAGE timeout")
-	}
-}
-
 type room struct {
-	name string            // roomid
-	msgs chan *msg         // user Subscriber or Message
-	resp chan *rtclib.JSIP // resp for request broadcast
-	quit chan *user        // user quit room
+	roomid string
 
-	task *rtclib.Task
+	task        *rtclib.Task
+	roomManager *roomManager
+	conf        *config
 
-	// key: userid, value: user, record users register in rooms
+	msgC chan *rtclib.JSIP
+
 	users     map[string]*user
-	usersLock sync.RWMutex
+	userdel   chan string
+	usersLock sync.RWMutex // Lock used in room goroutine and API goroutine
 }
 
-func (r *room) newUser(userid string, nickname string,
-	expire time.Duration) *user {
-
-	u := &user{
-		userid:   userid,
-		nickname: nickname,
-		task:     r.task,
-		res:      make(chan *rtclib.JSIP, 1024),
-	}
-
-	u.timer = golib.NewTimer(expire, u.subTimeout, r)
-
-	return u
-}
-
-func (r *room) delUser(u *user) bool {
-	ctx := r.task.GetCtx().(*ctx)
-
-	u.timer.Stop()
-
-	r.usersLock.Lock()
-	delete(r.users, u.userid)
-	r.task.LogInfo("Delete user %s, %v", u.userid, r.users)
-	r.usersLock.Unlock()
-
-	r.usersLock.RLock()
-	defer r.usersLock.RUnlock()
-	if len(r.users) == 0 {
-		ctx.roomdel <- r.name
-		return true
-	}
-
-	return false
-}
-
-func newRoom(name string, qsize int, subTimeout time.Duration,
-	task *rtclib.Task) *room {
-
+func (m *roomManager) newRoom(roomid string) *room {
 	r := &room{
-		name: name,
-		msgs: make(chan *msg, qsize),
-		resp: make(chan *rtclib.JSIP, 1),
-		quit: make(chan *user, qsize),
+		roomid: roomid,
 
-		task: task,
+		task:        m.task,
+		roomManager: m,
+		conf:        m.conf,
 
-		users: make(map[string]*user),
+		msgC: make(chan *rtclib.JSIP, m.conf.Qsize),
+
+		users:   make(map[string]*user),
+		userdel: make(chan string, m.conf.Qsize),
 	}
 
-	go r.process()
+	go r.loop()
 
 	return r
 }
 
-func (r *room) processSubscriber(sub *msg) {
-	exp, _ := sub.req.GetInt("Expire")
-	expire := time.Duration(exp) * time.Second
-	userid, _ := sub.req.GetString("P-Asserted-Identity")
+func (r *room) process(msg *rtclib.JSIP) {
+	r.msgC <- msg
+}
 
-	r.usersLock.RLock()
-	user := r.users[userid]
-	r.usersLock.RUnlock()
-	if user == nil {
-		if expire > 0 { // User register in chatroom
-			user = r.newUser(userid, sub.req.From, expire)
+func (r *room) delUser(userid string) {
+	r.userdel <- userid
+}
+
+func (r *room) loop() {
+	defer func() {
+		r.roomManager.delRoom(r.roomid)
+	}()
+
+	for {
+		select {
+		case msg := <-r.msgC:
+			if msg.Type == rtclib.SUBSCRIBE {
+				r.processSubscribe(msg)
+			} else {
+				r.processMessage(msg)
+			}
+
+		case name := <-r.userdel:
 			r.usersLock.Lock()
-			r.users[userid] = user
+			delete(r.users, name)
+
+			if len(r.users) == 0 {
+				// All user quit from room
+				r.usersLock.Unlock()
+				return
+			}
+
 			r.usersLock.Unlock()
-			sub.res <- rtclib.JSIPMsgRes(sub.req, 200)
-			r.task.LogInfo("User %s register in %s", userid, r.name)
-		} else {
-			sub.res <- rtclib.JSIPMsgRes(sub.req, 404)
-			r.task.LogError("User %s not register in %s", userid, r.name)
 		}
-
-		return
-	}
-
-	if expire > 0 { // User refresh register state in chatroom
-		user.timer.Reset(expire)
-		sub.res <- rtclib.JSIPMsgRes(sub.req, 200)
-	} else { // User deregister from chatroom
-		r.quit <- user
-		sub.res <- rtclib.JSIPMsgRes(sub.req, 200)
 	}
 }
 
-func (r *room) processMessage(mess *msg) {
-	userid, _ := mess.req.GetString("P-Asserted-Identity")
-
+func (r *room) processSubscribe(msg *rtclib.JSIP) {
+	userid, _ := msg.GetString("P-Asserted-Identity")
 	r.usersLock.RLock()
 	user := r.users[userid]
 	r.usersLock.RUnlock()
+
+	expire, _ := msg.GetUint("Expire")
+
+	if expire == 0 {
+		if user == nil {
+			res := rtclib.JSIPMsgRes(msg, 404)
+			res.SetString("Reason", "User Not Exist")
+			rtclib.SendMsg(res)
+
+			r.task.LogError("Recv SUBSCRIBE(0) but user(%s) not in room, %s", userid, msg.Suffix())
+
+			return
+		}
+
+		user.subscribe(0)
+	} else {
+		if user == nil {
+			user = r.newUser(userid, msg.From, expire)
+
+			r.usersLock.Lock()
+			r.users[userid] = user
+			r.usersLock.Unlock()
+		} else {
+			user.subscribe(expire)
+		}
+	}
+
+	rtclib.SendMsg(rtclib.JSIPMsgRes(msg, 200))
+}
+
+func (r *room) processMessage(msg *rtclib.JSIP) {
+	userid, _ := msg.GetString("P-Asserted-Identity")
+	r.usersLock.RLock()
+	user := r.users[userid]
+	r.usersLock.RUnlock()
+
 	if user == nil {
-		mess.res <- rtclib.JSIPMsgRes(mess.req, 404)
-		r.task.LogError("User %s not register in %s when receive Message",
-			userid, r.name)
+		res := rtclib.JSIPMsgRes(msg, 404)
+		res.SetString("Reason", "User Not Exist")
+		rtclib.SendMsg(res)
+
+		r.task.LogError("Recv MESSAGE but user(%s) not in room, %s", userid, msg.Suffix())
 
 		return
 	}
 
-	mess.res <- rtclib.JSIPMsgRes(mess.req, 200)
+	rtclib.SendMsg(rtclib.JSIPMsgRes(msg, 200))
 
+	// TODO save message in storage
+
+	// broadcast message to all subscriber
 	r.usersLock.RLock()
+	defer r.usersLock.RUnlock()
+
 	for id, u := range r.users {
 		if id == userid {
 			continue
 		}
 
-		go u.sendMessage(mess.req)
-	}
-	r.usersLock.RUnlock()
-}
-
-func (r *room) process() {
-	for {
-		select {
-		case u := <-r.quit:
-			if r.delUser(u) {
-				return
-			}
-
-		case msg := <-r.msgs:
-			switch msg.req.Type {
-			case rtclib.SUBSCRIBE:
-				r.processSubscriber(msg)
-			case rtclib.MESSAGE:
-				r.processMessage(msg)
-			}
-		}
+		u.process(msg)
 	}
 }

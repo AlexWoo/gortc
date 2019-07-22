@@ -1,3 +1,9 @@
+// Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
+//
+
+// ChatRoom demo
+// chatroom api
+
 package main
 
 import (
@@ -7,87 +13,59 @@ import (
 )
 
 type apiv1 struct {
-	c *ctx
+	manager *roomManager
 }
 
 func APIInstance() rtclib.API {
 	return &apiv1{
-		c: c,
+		manager: manager,
 	}
 }
 
-func (i *apiv1) listrooms() (int, *map[string]string, interface{},
-	*map[int]rtclib.RespCode) {
-
-	rooms := []string{}
-
-	i.c.roomsLock.RLock()
-	for k := range i.c.rooms {
-		rooms = append(rooms, k)
-	}
-	i.c.roomsLock.RUnlock()
+func (api *apiv1) listrooms() (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
+	api.manager.roomsLock.RLock()
+	defer api.manager.roomsLock.RUnlock()
 
 	ret := map[string][]string{
-		"rooms": rooms,
+		"rooms": make([]string, len(api.manager.rooms)),
+	}
+
+	i := 0
+	for id := range api.manager.rooms {
+		ret["rooms"][i] = id
+		i++
 	}
 
 	return 0, nil, ret, nil
 }
 
-func (i *apiv1) roominfo(roomid string) (int, *map[string]string, interface{},
-	*map[int]rtclib.RespCode) {
+func (api *apiv1) roominfo(roomid string) (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
+	api.manager.roomsLock.RLock()
+	defer api.manager.roomsLock.RUnlock()
 
-	users := make(map[string]string)
-
-	i.c.roomsLock.RLock()
-	room, ok := i.c.rooms[roomid]
-	i.c.roomsLock.RUnlock()
-	if ok {
-		room.usersLock.RLock()
-		for k, v := range room.users {
-			users[k] = v.nickname
-		}
-		room.usersLock.RUnlock()
-
-		ret := map[string]map[string]string{
-			roomid: users,
-		}
-
-		return 0, nil, ret, nil
+	ret := map[string]map[string]string{
+		roomid: make(map[string]string),
 	}
 
-	return 3, nil, "room " + roomid + " not exist", nil
-}
-
-func (i *apiv1) delroom(roomid string) (int, *map[string]string, interface{},
-	*map[int]rtclib.RespCode) {
-
-	i.c.roomsLock.RLock()
-	room, ok := i.c.rooms[roomid]
-	i.c.roomsLock.RUnlock()
-	if ok {
-		i.c.roomsLock.RLock()
-		for _, user := range room.users {
-			room.quit <- user
+	if room, ok := api.manager.rooms[roomid]; ok {
+		for id, user := range room.users {
+			ret[roomid][id] = user.nickname
 		}
-		i.c.roomsLock.RUnlock()
 	}
 
-	return 0, nil, nil, nil
+	return 0, nil, ret, nil
 }
 
-func (i *apiv1) deluser(roomid string, userid string) (int, *map[string]string,
-	interface{}, *map[int]rtclib.RespCode) {
+func (api *apiv1) deluser(roomid string, userid string) (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
+	api.manager.roomsLock.RLock()
+	defer api.manager.roomsLock.RUnlock()
 
-	i.c.roomsLock.RLock()
-	room, ok := i.c.rooms[roomid]
-	i.c.roomsLock.RUnlock()
-	if ok {
+	if room, ok := api.manager.rooms[roomid]; ok {
 		room.usersLock.RLock()
-		user, ok1 := room.users[userid]
-		room.usersLock.RUnlock()
-		if ok1 {
-			room.quit <- user
+		defer room.usersLock.RUnlock()
+
+		if user, ok := room.users[userid]; ok {
+			user.subscribe(0)
 		}
 	}
 
@@ -99,18 +77,16 @@ func (i *apiv1) deluser(roomid string, userid string) (int, *map[string]string,
 //
 // /chatroom/v1/rooms/<roomid>
 //	GET room info of <roomid>
-func (i *apiv1) Get(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
-
+func (api *apiv1) Get(req *http.Request, paras string) (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
 	para := strings.Split(paras, "/")
 
 	switch para[0] {
 	case "rooms":
 		switch len(para) {
 		case 1:
-			return i.listrooms()
+			return api.listrooms()
 		case 2:
-			return i.roominfo(para[1])
+			return api.roominfo(para[1])
 		default:
 			return 3, nil, "Unsupported para number", nil
 		}
@@ -119,29 +95,20 @@ func (i *apiv1) Get(req *http.Request, paras string) (int,
 	return 3, nil, "Unknown Para", nil
 }
 
-func (i *apiv1) Post(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
-
+func (api *apiv1) Post(req *http.Request, paras string) (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
 	return 3, nil, nil, nil
 }
 
-// /chatroom/v1/rooms/<roomid>
-//	DELETE room <roomid>
-//
 // /chatroom/v1/rooms/<roomid>/<userid>
 //	DELETE <userud> from <roomid>
-func (i *apiv1) Delete(req *http.Request, paras string) (int,
-	*map[string]string, interface{}, *map[int]rtclib.RespCode) {
-
+func (api *apiv1) Delete(req *http.Request, paras string) (int, *map[string]string, interface{}, *map[int]rtclib.RespCode) {
 	para := strings.Split(paras, "/")
 
 	switch para[0] {
 	case "rooms":
 		switch len(para) {
-		case 2:
-			return i.delroom(para[1])
 		case 3:
-			return i.deluser(para[1], para[2])
+			return api.deluser(para[1], para[2])
 		default:
 			return 3, nil, "Unsupported para number", nil
 		}
