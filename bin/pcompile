@@ -43,7 +43,7 @@ if [ -d $path/conf ];then
     confs=`ls $1/conf`
     for f in $confs
     do
-        test -f $1/conf/$slp/$f || cp $path/conf/$f $path/conf/$slp/
+        test -f $path/conf/$slp/$f || cp $1/conf/$f $path/conf/$slp/
     done
 fi
 

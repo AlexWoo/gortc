@@ -1,7 +1,7 @@
 // Copyright (C) AlexWoo(Wu Jie) wj19840501@gmail.com
 //
 
-// JSIP Default Transaction
+// JSIP Transaction
 
 package rtclib
 

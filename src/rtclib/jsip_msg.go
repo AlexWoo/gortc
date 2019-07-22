@@ -376,39 +376,19 @@ func JSIPMsgBye(req *JSIP) *JSIP {
 		return nil
 	}
 
-	bye := &JSIP{
-		Type:       BYE,
-		RequestURI: req.RequestURI,
-		From:       req.From,
-		To:         req.To,
-		CSeq:       uint64(rand.Uint32()),
-		DialogueID: req.DialogueID,
+	msg := JSIPMsgReq(BYE, req.RequestURI, req.From, req.To, req.DialogueID)
 
-		conn:   req.conn,
-		rawMsg: make(map[string]interface{}),
-	}
-
-	return bye
+	return msg
 }
 
 // Create a UPDATE msg for session
 func JSIPMsgUpdate(req *JSIP) *JSIP {
 	if req.Type != INVITE || req.Code != 0 {
-		fmt.Println("Cannot create BYE for non INVITE Request")
+		fmt.Println("Cannot create UPDATE for non INVITE Request")
 		return nil
 	}
 
-	update := &JSIP{
-		Type:       UPDATE,
-		RequestURI: req.RequestURI,
-		From:       req.From,
-		To:         req.To,
-		CSeq:       uint64(rand.Uint32()),
-		DialogueID: req.DialogueID,
+	msg := JSIPMsgReq(UPDATE, req.RequestURI, req.From, req.To, req.DialogueID)
 
-		conn:   req.conn,
-		rawMsg: make(map[string]interface{}),
-	}
-
-	return update
+	return msg
 }
