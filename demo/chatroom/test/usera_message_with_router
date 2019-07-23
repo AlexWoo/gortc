@@ -1,0 +1,93 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa1",
+        "Expire": 300,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa2",
+        "CSeq": 1,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "Router": "Alex@gortc.com",
+        "Body": "hello world"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa3",
+        "CSeq": 1,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "Router": "Alex@gortc.com, Bob@gortc.com",
+        "Body": "hello world"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa4",
+        "Expire": 0,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Code": 200,
+        "CSeq": 1
+    }
+}
+
+]

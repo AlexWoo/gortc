@@ -1,0 +1,102 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa1",
+        "Expire": 300,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "timeout": "10s",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa2",
+        "CSeq": 1,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "Body": "hello world"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "Alex@gortc.com",
+        "From": "Bob@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Bob@gortc.com",
+        "Body": "hello world 11"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Bob@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Bob@test.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "timeout": "10s",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa3",
+        "Expire": 0,
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Code": 200,
+        "CSeq": 1
+    }
+}
+
+]

@@ -4,9 +4,9 @@
     "type": "send",
     "value": {
         "Type": "SUBSCRIBE",
-        "Request-URI": "room:test1@test.com",
-        "From": "Alex@test.com",
-        "To": "room:test1@test.com",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
         "DialogueID": "aaa1",
         "Expire": 10,
         "CSeq": 1
@@ -17,7 +17,8 @@
     "type": "recv",
     "value": {
         "CSeq": 1,
-        "Code": 400
+        "Code": 400,
+        "Reason": "No P-Asserted-Identity"
     }
 }
 

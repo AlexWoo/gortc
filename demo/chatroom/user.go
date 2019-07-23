@@ -77,7 +77,14 @@ func (u *user) loop() {
 
 			u.msgs[dlg] = msg
 
-			rtclib.SendMsg(rtclib.JSIPMsgClone(msg, dlg))
+			m := rtclib.JSIPMsgClone(msg, dlg)
+			m.RequestURI = u.userid
+			if len(m.Router) > 1 {
+				m.Router = m.Router[1:]
+			} else {
+				m.Router = []string{}
+			}
+			rtclib.SendMsg(m)
 
 		case res := <-u.res:
 			dlg := res.DialogueID

@@ -1,0 +1,70 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa1",
+        "P-Asserted-Identity": "Alex@test.com",
+        "Expire": 20,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa2",
+        "P-Asserted-Identity": "Alex1@test.com",
+        "Expire": 0,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 404,
+        "Reason": "User Not Exist"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa3",
+        "P-Asserted-Identity": "Alex@test.com",
+        "Expire": 0,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+}
+
+]

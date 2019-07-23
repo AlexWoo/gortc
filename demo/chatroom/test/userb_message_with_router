@@ -1,0 +1,110 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Bob@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "bbb1",
+        "Expire": 300,
+        "P-Asserted-Identity": "Bob@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 200
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "Bob@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "Body": "hello world"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Bob@test.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Type": "MESSAGE",
+        "Request-URI": "Bob@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Alex@gortc.com",
+        "Router": "Bob@gortc.com",
+        "Body": "hello world"
+    },
+    "vars": {
+        "$cseq": "CSeq",
+        "$dlg": "DialogueID"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "RESPONSE",
+        "Code": 200,
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "P-Asserted-Identity": "Bob@test.com"
+    },
+    "vars": {
+        "CSeq": "$cseq",
+        "DialogueID": "$dlg"
+    }
+},
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Bob@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "bbb2",
+        "Expire": 0,
+        "P-Asserted-Identity": "Bob@gortc.com",
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "Code": 200,
+        "CSeq": 1
+    }
+}
+
+]

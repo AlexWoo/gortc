@@ -1,0 +1,26 @@
+[
+
+{
+    "type": "send",
+    "value": {
+        "Type": "SUBSCRIBE",
+        "Request-URI": "room:test1@gortc.com",
+        "From": "Alex@gortc.com",
+        "To": "room:test1@gortc.com",
+        "DialogueID": "aaa1",
+        "P-Asserted-Identity": "Alex@test.com",
+        "Expire": 0,
+        "CSeq": 1
+    }
+},
+
+{
+    "type": "recv",
+    "value": {
+        "CSeq": 1,
+        "Code": 404,
+        "Reason": "Room Not Exist"
+    }
+}
+
+]

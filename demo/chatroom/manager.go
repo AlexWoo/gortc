@@ -163,7 +163,7 @@ func (m *roomManager) processMessage(msg *rtclib.JSIP) {
 
 	if room == nil {
 		res := rtclib.JSIPMsgRes(msg, 404)
-		res.SetString("Reason", "Room not exist")
+		res.SetString("Reason", "Room Not Exist")
 		rtclib.SendMsg(res)
 
 		m.task.LogError("Recv MESSAGE but room(%s) not exist, %s", roomid, msg.Suffix())
