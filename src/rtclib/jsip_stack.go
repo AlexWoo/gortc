@@ -158,7 +158,7 @@ func (s *JSIPStack) processTransaction(msg *JSIP) {
 		}
 
 		if msg.conn != nil {
-			if msg.Type == INVITE || !inviteSession(msg) {
+			if msg.Type == INVITE || !msg.inviteSession() {
 				s.connLock.Lock()
 				s.conns[msg.DialogueID] = msg.conn
 				s.connLock.Unlock()
@@ -373,7 +373,7 @@ func (s *JSIPStack) loop() {
 				continue
 			}
 
-			if inviteSession(msg) {
+			if msg.inviteSession() {
 				s.processSession(msg)
 			} else {
 				s.processTransaction(msg)
@@ -381,7 +381,7 @@ func (s *JSIPStack) loop() {
 
 		case msg := <-s.transq:
 			if msg.recv {
-				if inviteSession(msg) {
+				if msg.inviteSession() {
 					s.processSession(msg)
 				} else {
 					s.handler(msg)

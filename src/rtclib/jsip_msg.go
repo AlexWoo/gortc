@@ -275,6 +275,25 @@ func (m *JSIP) DelHeader(header string) {
 	delete(m.rawMsg, header)
 }
 
+func (m *JSIP) inviteSession() bool {
+	switch m.Type {
+	case MESSAGE:
+		return false
+	case SUBSCRIBE:
+		return false
+	case REGISTER:
+		return false
+	case NOTIFY:
+		return false
+	case OPTIONS:
+		return false
+	case TERM:
+		return false
+	default:
+		return true
+	}
+}
+
 // Clone a jsip msg, using new dlg
 func JSIPMsgClone(m *JSIP, dlg string) *JSIP {
 	msg := &JSIP{
@@ -308,6 +327,17 @@ func JSIPMsgReq(typ JSIPType, requestURI string, from string, to string, dlg str
 		DialogueID: dlg,
 
 		rawMsg: make(map[string]interface{}),
+	}
+
+	return msg
+}
+
+// Create a JSIP Term
+func JSIPMsgTerm(dlg string) *JSIP {
+	msg := &JSIP{
+		Type:       TERM,
+		DialogueID: dlg,
+		recv:       true,
 	}
 
 	return msg

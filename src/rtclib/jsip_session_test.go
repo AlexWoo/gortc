@@ -22,19 +22,6 @@ func TestSessionCommon(t *testing.T) {
 	assert(jsipSessionState(-100).String() == "Unknown")
 	assert(jsipSessionState(0).String() == "Unknown")
 	assert(INVITE_18X.String() == "INVITE_18X")
-
-	assert(inviteSession(JSIPMsgReq(INVITE, "jsip.com", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(ACK, "jsip.com", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(BYE, "jsip.co)m", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(CANCEL, "jsip.com", "jsip", "jsip", "123456")))
-	assert(!inviteSession(JSIPMsgReq(REGISTER, "jsip.com", "jsip", "jsip", "123456")))
-	assert(!inviteSession(JSIPMsgReq(OPTIONS, "jsip.com", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(INFO, "jsip.com", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(UPDATE, "jsip.com", "jsip", "jsip", "123456")))
-	assert(inviteSession(JSIPMsgReq(PRACK, "jsip.com", "jsip", "jsip", "123456")))
-	assert(!inviteSession(JSIPMsgReq(SUBSCRIBE, "jsip.com", "jsip", "jsip", "123456")))
-	assert(!inviteSession(JSIPMsgReq(MESSAGE, "jsip.com", "jsip", "jsip", "123456")))
-	assert(!inviteSession(JSIPMsgReq(NOTIFY, "jsip.com", "jsip", "jsip", "123456")))
 }
 
 func TestGetProcess(t *testing.T) {

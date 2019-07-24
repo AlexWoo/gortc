@@ -75,25 +75,6 @@ type jsipSessionInit struct {
 	term                chan string
 }
 
-func inviteSession(m *JSIP) bool {
-	switch m.Type {
-	case MESSAGE:
-		return false
-	case SUBSCRIBE:
-		return false
-	case REGISTER:
-		return false
-	case NOTIFY:
-		return false
-	case OPTIONS:
-		return false
-	case TERM:
-		return false
-	default:
-		return true
-	}
-}
-
 func createSession(m *JSIP, init *jsipSessionInit, log *golib.Log) *jsipSession {
 	s := &jsipSession{
 		req:        m,
@@ -134,13 +115,7 @@ func (s *jsipSession) quit() {
 
 func (s *jsipSession) loop() {
 	defer func() {
-		term := &JSIP{
-			Type:       TERM,
-			DialogueID: s.req.DialogueID,
-			recv:       true,
-		}
-		s.init.msg <- term
-
+		s.init.msg <- JSIPMsgTerm(s.req.DialogueID)
 		s.init.term <- s.req.DialogueID
 	}()
 

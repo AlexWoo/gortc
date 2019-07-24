@@ -161,13 +161,8 @@ func (t *jsipTransaction) onMsg(m *JSIP) {
 func (t *jsipTransaction) quit() {
 	t.timer.Stop()
 
-	if !inviteSession(t.req) {
-		term := &JSIP{
-			Type:       TERM,
-			DialogueID: t.req.DialogueID,
-			recv:       true,
-		}
-		t.init.msg <- term
+	if !t.req.inviteSession() {
+		t.init.msg <- JSIPMsgTerm(t.req.DialogueID)
 	}
 
 	tid := transactionID(t.req.DialogueID, t.req.CSeq)

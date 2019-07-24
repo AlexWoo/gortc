@@ -276,10 +276,20 @@ func TestJSIPCommon(t *testing.T) {
 		rawMsg:     make(map[string]interface{}),
 	}
 
-	term := &JSIP{
-		Type:       TERM,
-		DialogueID: "test1",
-	}
+	term := JSIPMsgTerm("test1")
+
+	assert(JSIPMsgReq(INVITE, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(ACK, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(BYE, "jsip.co)m", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(CANCEL, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(!JSIPMsgReq(REGISTER, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(!JSIPMsgReq(OPTIONS, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(INFO, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(UPDATE, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(JSIPMsgReq(PRACK, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(!JSIPMsgReq(SUBSCRIBE, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(!JSIPMsgReq(MESSAGE, "jsip.com", "jsip", "jsip", "123456").inviteSession())
+	assert(!JSIPMsgReq(NOTIFY, "jsip.com", "jsip", "jsip", "123456").inviteSession())
 
 	if req.Name() != "INVITE" {
 		t.Error("Request Name error")
@@ -358,6 +368,11 @@ func TestJSIPConstruct(t *testing.T) {
 		DialogueID: "test1",
 		rawMsg:     make(map[string]interface{}),
 	}
+
+	term := JSIPMsgTerm("term1")
+	assert(term.Type == TERM)
+	assert(term.DialogueID == "term1")
+	assert(term.recv)
 
 	clone1 := JSIPMsgClone(req, "clone1")
 	assert(req.Type == clone1.Type)
