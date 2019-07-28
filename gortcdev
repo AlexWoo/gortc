@@ -1,0 +1,4 @@
+#!/bin/bash
+
+localwork=~/Github/
+docker run --rm -v $localwork:/root/work/ -p 22:22 -p 2539:2539 -p 8080:8080 alexwoo/gortc

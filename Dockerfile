@@ -1,10 +1,11 @@
-FROM alexwoo/golang as install
+FROM alexwoo/centos-dev
 MAINTAINER AlexWoo <wj19840501@gmail.com>
-RUN git clone https://github.com/AlexWoo/gortc.git && cd gortc && ./install
 
-FROM centos
-COPY --from=install /usr/local/gortc /usr/local/gortc
-EXPOSE 8080 2539
+COPY ./ /root/work/gortc/
+RUN cd /root/work/gortc && ./install
+RUN rm -rf /root/work/gortc
+
+EXPOSE 8080 2539 22
 VOLUME /usr/local/gortc/logs/
-WORKDIR /usr/local/gortc
+
 CMD /usr/local/gortc/bin/gortc

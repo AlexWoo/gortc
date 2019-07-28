@@ -14,8 +14,15 @@ usage: $exec [options]
         --help                  print this message
         --prefix=InstallPath    set installation prefix
         --debug                 build with debug mode
+        --docker                build docker image gortc development
 
 END
+}
+
+docker_build()
+{
+    docker build -t alexwoo/gortc ./
+    cp -f gortcdev /usr/local/bin/
 }
 
 install_service()
@@ -42,6 +49,7 @@ create_user()
 
 help=no
 debug=no
+docker=no
 
 for option
 do
@@ -55,6 +63,7 @@ do
         --prefix=)      InstallPath="!"                             ;;
         --prefix=*)     InstallPath="$value"                        ;;
         --debug)        debug=yes                                   ;;
+        --docker)       docker=yes                                  ;;
         *)
             echo "$exec: error: invalid option \"$option\""
             usage
@@ -65,6 +74,11 @@ done
 
 if [ $help = yes ];then
     usage
+    exit 0
+fi
+
+if [ $docker = yes ];then
+    docker_build
     exit 0
 fi
 
